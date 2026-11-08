@@ -13,6 +13,7 @@
   main { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; text-align: center; box-shadow: 0 4px 16px rgba(40, 25, 10, .08); }
   h1 { font-size: 24px; margin: 8px 0; }
   .icon { font-size: 44px; }
+  .btn[hidden] { display: none; }
   .btn { display: inline-block; margin-top: 16px; padding: 12px 22px; border-radius: 12px; background: var(--primary); color: var(--on-primary); font-weight: 700; text-decoration: none; }
   .muted { color: var(--muted); font-size: 14px; }
   .link { font-family: ui-monospace, Consolas, monospace; font-size: 13px; word-break: break-all; color: var(--muted); }
@@ -25,33 +26,51 @@
   <h1>Kết nối máy chủ LAN</h1>
   <p class="muted" id="msg">Đang tìm địa chỉ app…</p>
   <a class="btn" id="go" href="#" hidden>Mở app</a>
+  <button class="btn" id="retry" type="button" hidden style="border:0;cursor:pointer;font:inherit">🔄 Thử lại ngay</button>
   <p class="link" id="link"></p>
   <p class="muted">Đăng ký hoặc đăng nhập, chờ quản trị viên cấp quyền để nhận địa chỉ IP máy chủ LAN Chat.</p>
 </main>
 <script>
-// Link app (đường hầm Cloudflare) đổi mỗi lần máy chủ bật lại; máy chủ tự cập nhật file link.txt này
-(async () => {
-  const msg = document.getElementById('msg'), go = document.getElementById('go');
+// Link app (đường hầm Cloudflare) đổi mỗi lần máy chủ bật lại; máy chủ tự cập nhật file link.txt này.
+// Máy chủ tắt thì trang tự thử lại mỗi 15 giây và tự nhận link mới khi máy chủ bật lại, không cần tải lại trang.
+const $ = id => document.getElementById(id);
+const msg = $('msg'), go = $('go'), retry = $('retry');
+let timer = null;
+
+async function check() {
+  clearInterval(timer);
+  retry.hidden = true; go.hidden = true;
+  msg.textContent = 'Đang kiểm tra máy chủ…';
   try {
     const r = await fetch('link.txt?t=' + Date.now(), { cache: 'no-store' });
-    const url = (await r.text()).trim();
-    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url)) throw new Error('Chưa có link');
-    const target = url.replace(/\/?$/, '/') + location.search; // giữ ?moi=… của link mời
-    document.getElementById('link').textContent = url;
-    // Thử kết nối trước: đường hầm cũ đã tắt thì tên miền bị xóa, chuyển sang sẽ gặp trang lỗi DNS
-    msg.textContent = 'Đang kiểm tra máy chủ…';
+    const url = (await r.text()).trim().replace(/\/+$/, '');
+    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(url)) throw new Error('Chưa có link');
+    $('link').textContent = url;
+    // Chỉ chính app mới trả lời /api/ping kèm quyền đọc chéo trang; trang lỗi 1033 hay lỗi DNS đều bị coi là tắt
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 10000);
-    try { await fetch(url.replace(/\/?$/, '/') + 'api/auth/me', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal }); }
-    catch { throw new Error('Không kết nối được'); }
-    finally { clearTimeout(timer); }
+    const t = setTimeout(() => ctl.abort(), 10000);
+    let ok = false;
+    try { ok = !!(await (await fetch(url + '/api/ping', { cache: 'no-store', signal: ctl.signal })).json()).ok; }
+    catch { } finally { clearTimeout(t); }
+    if (!ok) throw new Error('Máy chủ không trả lời');
+    const target = url + '/' + location.search; // giữ ?moi=… của link mời
     go.href = target; go.hidden = false;
-    msg.textContent = 'Đang chuyển tới app… Nếu không tự chuyển, bấm nút bên dưới.';
-    setTimeout(() => location.replace(target), 1200);
+    msg.textContent = 'Máy chủ đang chạy. Đang chuyển tới app…';
+    setTimeout(() => location.replace(target), 800);
   } catch (e) {
-    msg.innerHTML = '<span class="err">Máy chủ đang tắt hoặc chưa bật link Internet.</span><br>Hãy thử lại sau ít phút hoặc liên hệ quản trị viên.';
+    let left = 15;
+    const tick = () => {
+      msg.innerHTML = '<span class="err">Máy chủ đang tắt hoặc chưa bật link Internet.</span><br>'
+        + `Tự thử lại sau <b>${left}</b> giây. Quản trị viên: bấm đúp <b>khoi-dong.bat</b> trên máy chủ.`;
+      if (left-- <= 0) check();
+    };
+    retry.hidden = false;
+    tick();
+    timer = setInterval(tick, 1000);
   }
-})();
+}
+retry.onclick = check;
+check();
 </script>
 </body>
 </html>
