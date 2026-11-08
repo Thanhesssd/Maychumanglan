@@ -3,47 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quản lý cửa hàng</title>
+<title>Quản lý mạng LAN</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .tab { border: 0; background: none; padding: 10px 14px; cursor: pointer; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1px; }
-  .tab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); }
-  .tab .cnt { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 12px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .stat { padding: 14px 16px; }
-  .stat .v { font-size: 26px; font-weight: 800; }
-  .stat .l { color: var(--muted); font-size: 13px; }
-  .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .tools .in { max-width: 320px; }
-  tr.flash { animation: flash 2.5s ease-out; }
-  @keyframes flash { from { background: color-mix(in srgb, var(--accent) 35%, transparent); } }
-  select.status { padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); }
   .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; font-weight: 600; word-break: break-all; }
   .list { display: grid; gap: 8px; }
-  .row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
-  .row .grow { flex: 1; min-width: 0; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); flex-wrap: wrap; }
+  .row .grow { flex: 1; min-width: 160px; }
   .login { max-width: 360px; margin: 12vh auto; }
-  .diagram { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; padding: 6px 0 2px; }
-  .node { padding: 10px 14px; border-radius: 12px; border: 2px solid var(--border); background: var(--panel-2); text-align: center; min-width: 120px; }
+  .diagram { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+  .node { padding: 10px 14px; border-radius: 12px; border: 2px solid var(--border); background: var(--panel-2); text-align: center; min-width: 130px; }
   .node.on { border-color: var(--ok); }
   .node.off { border-color: var(--bad); }
   .node small { display: block; color: var(--muted); }
   .arrow { color: var(--muted); font-weight: 700; }
-  .cust { cursor: pointer; }
-  .cust:hover { background: var(--panel-2); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .stat { padding: 14px 16px; }
+  .stat .v { font-size: 24px; font-weight: 800; }
+  .stat .l { color: var(--muted); font-size: 13px; }
+  .bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--primary); width: 0; transition: width .3s; }
 </style>
 </head>
 <body>
 <section id="loginView" class="login card hidden">
   <form class="card-b" id="loginForm" style="display:grid;gap:12px">
-    <h2>🔐 Trang quản lý</h2>
+    <h2>🔐 Quản lý mạng LAN</h2>
     <p class="muted small" style="margin:0">Nhập mã PIN in ở cửa sổ máy chủ (lưu trong data/config.json).</p>
-    <input class="in" id="pin" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Mã PIN (6 số)" required
-      style="-webkit-text-security:disc;letter-spacing:.3em">
+    <input class="in" id="pin" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Mã PIN (6 số)" required style="-webkit-text-security:disc;letter-spacing:.3em">
     <label class="check small"><input type="checkbox" id="showPin"> Hiện mã PIN</label>
     <div class="err" id="loginErr" role="alert"></div>
     <button class="btn primary">Vào trang quản lý</button>
@@ -52,150 +42,86 @@
 
 <div id="app" class="hidden">
   <div class="statusbar">
-    <div class="brand">📋 <span id="shopName">Quản lý cửa hàng</span></div>
-    <span class="pill"><i class="dot wait" id="dServer"></i><span id="tServer">Đang kết nối…</span></span>
-    <span class="pill"><i class="dot" id="dQuay"></i><span id="tQuay">Quầy: —</span></span>
+    <div class="brand">🖧 <span id="title">Quản lý mạng LAN</span></div>
+    <span class="pill"><i class="dot wait" id="dHub"></i><span id="tHub">Đang kết nối…</span></span>
     <span class="pill"><i class="dot" id="dChat"></i><span id="tChat">LAN Chat: —</span></span>
-    <span class="pill muted" id="tLast">Chưa có đơn</span>
+    <a class="btn sm" href="/" target="_blank" rel="noopener">Xem trang kết nối ↗</a>
   </div>
-  <main class="wrap">
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" data-tab="orders" aria-selected="true">Đơn hàng<span class="cnt hidden" id="newCnt"></span></button>
-      <button class="tab" role="tab" data-tab="customers">Khách hàng</button>
-      <button class="tab" role="tab" data-tab="network">Mạng LAN</button>
-      <button class="tab" role="tab" data-tab="chat">LAN Chat</button>
-    </div>
-
+  <main class="wrap" style="display:grid;gap:16px">
     <div class="stats">
-      <div class="card stat"><div class="v num" id="sOrders">0</div><div class="l">Đơn hàng</div></div>
-      <div class="card stat"><div class="v num" id="sNew">0</div><div class="l">Đơn mới chờ xử lý</div></div>
-      <div class="card stat"><div class="v num" id="sCust">0</div><div class="l">Khách hàng</div></div>
-      <div class="card stat"><div class="v num" id="sRev">0đ</div><div class="l">Doanh thu (không tính đơn hủy)</div></div>
+      <div class="card stat"><div class="v" id="sChat">—</div><div class="l">Máy chủ LAN Chat</div></div>
+      <div class="card stat"><div class="v num" id="sAddr">0</div><div class="l">Địa chỉ để kết nối</div></div>
+      <div class="card stat"><div class="v num" id="sDev">0</div><div class="l">Thiết bị đang xem trang</div></div>
+      <div class="card stat"><div class="v num" id="sUp">—</div><div class="l">Trang địa chỉ đã chạy</div></div>
     </div>
 
-    <!-- Đơn hàng -->
-    <section data-view="orders" class="card">
-      <div class="card-h">
-        <h2 style="font-size:17px">Đơn hàng</h2>
-        <div class="tools">
-          <input class="in" id="qOrders" type="search" placeholder="Tìm mã đơn, tên, SĐT, địa chỉ…">
-          <select class="in" id="fStatus" style="width:auto"><option value="">Mọi trạng thái</option></select>
-        </div>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Mã</th><th>Lúc</th><th>Khách</th><th>Sản phẩm</th><th>Tổng</th><th>Thanh toán</th><th>Trạng thái</th></tr></thead>
-        <tbody id="orderRows"></tbody>
-      </table></div>
-    </section>
+    <div class="card">
+      <div class="card-h"><h2 style="font-size:17px">Sơ đồ kết nối</h2><span class="muted small" id="updated"></span></div>
+      <div class="card-b"><div class="diagram" id="diagram"></div></div>
+    </div>
 
-    <!-- Khách hàng -->
-    <section data-view="customers" class="card hidden">
-      <div class="card-h">
-        <h2 style="font-size:17px">Hồ sơ khách (gom theo số điện thoại)</h2>
-        <input class="in" id="qCust" type="search" placeholder="Tìm tên, SĐT, địa chỉ…" style="max-width:320px">
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Khách</th><th>Số điện thoại</th><th>Địa chỉ gần nhất</th><th>Số đơn</th><th>Đã mua</th><th>Lần cuối</th></tr></thead>
-        <tbody id="custRows"></tbody>
-      </table></div>
-    </section>
-
-    <!-- Mạng LAN -->
-    <section data-view="network" class="hidden" style="display:grid;gap:16px">
+    <div class="cols">
       <div class="card">
-        <div class="card-h"><h2 style="font-size:17px">Sơ đồ kết nối</h2><span class="muted small" id="netUpdated"></span></div>
-        <div class="card-b"><div class="diagram" id="diagram"></div></div>
+        <div class="card-h"><h2 style="font-size:17px">Máy chủ LAN Chat</h2><span id="chatBadge"></span></div>
+        <div class="card-b" style="display:grid;gap:12px">
+          <dl class="kv" id="chatInfo"></dl>
+          <form id="cfgForm" style="display:grid;gap:10px">
+            <label class="field">Địa chỉ máy chủ LAN Chat
+              <input class="in" id="cUrl" placeholder="http://localhost:8000 hoặc 192.168.1.10:8443"></label>
+            <label class="field">Tiêu đề trang kết nối
+              <input class="in" id="cTitle" maxlength="60"></label>
+            <div class="err" id="cfgErr" role="alert"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary">Lưu</button><button class="btn" type="button" id="btnCheck">Kiểm tra lại</button></div>
+          </form>
+        </div>
       </div>
-      <div class="cols">
-        <div class="card">
-          <div class="card-h"><h2 style="font-size:17px">Máy chủ cửa hàng</h2></div>
-          <div class="card-b"><dl class="kv" id="srvInfo"></dl>
-            <p class="small muted">Máy khác cùng Wi‑Fi mở một trong các địa chỉ trên. Nếu không vào được, chạy <b>mo-cong-mang.bat</b> trên máy chủ để mở cổng tường lửa.</p></div>
+
+      <div class="card">
+        <div class="card-h"><h2 style="font-size:17px">Tự tìm máy chủ trong mạng LAN</h2></div>
+        <div class="card-b" style="display:grid;gap:10px">
+          <p class="small muted" style="margin:0">Quét các máy cùng dải mạng (cổng 8443) để tìm máy chủ LAN Chat đang chạy. Mất khoảng 10–30 giây.</p>
+          <button class="btn" id="btnScan">🔍 Bắt đầu quét</button>
+          <div class="bar hidden" id="scanBar"><i></i></div>
+          <div class="list" id="scanResult"></div>
         </div>
-        <div class="card">
-          <div class="card-h"><h2 style="font-size:17px">Máy chủ LAN Chat</h2><span id="chatHealthBadge"></span></div>
-          <div class="card-b"><dl class="kv" id="chatInfo"></dl></div>
-        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h2 style="font-size:17px">Địa chỉ cung cấp cho máy khác</h2><span class="muted small">Đang hiện ở trang kết nối</span></div>
+      <div class="card-b list" id="connect"></div>
+    </div>
+
+    <div class="cols">
+      <div class="card">
+        <div class="card-h"><h2 style="font-size:17px">Card mạng của máy này</h2></div>
+        <div class="card-b list" id="ifaces"></div>
       </div>
       <div class="card">
-        <div class="card-h"><h2 style="font-size:17px">Thiết bị đang kết nối</h2><span class="muted small" id="devCount"></span></div>
+        <div class="card-h"><h2 style="font-size:17px">Thiết bị đang mở trang</h2><span class="muted small" id="devCount"></span></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Vai trò</th><th>Địa chỉ IP</th><th>Thiết bị</th><th>Kết nối từ</th></tr></thead>
+          <thead><tr><th>Trang</th><th>Địa chỉ IP</th><th>Thiết bị</th><th>Từ lúc</th></tr></thead>
           <tbody id="devRows"></tbody>
         </table></div>
       </div>
-    </section>
-
-    <!-- LAN Chat -->
-    <section data-view="chat" class="hidden cols">
-      <div class="card">
-        <div class="card-h"><h2 style="font-size:17px">Kết nối LAN Chat</h2><span id="chatBadge"></span></div>
-        <form class="card-b" id="chatForm" style="display:grid;gap:10px">
-          <label class="field">Địa chỉ máy chủ LAN Chat
-            <input class="in" id="cUrl" placeholder="http://localhost:8000 hoặc https://192.168.1.10:8443"></label>
-          <label class="field">Tên tài khoản bot
-            <input class="in" id="cName" maxlength="60"></label>
-          <label class="check" style="display:flex;gap:8px"><input type="checkbox" id="cOn"> Bật gửi đơn sang LAN Chat</label>
-          <div class="err" id="chatErr" role="alert"></div>
-          <div class="tools"><button class="btn primary">Lưu và kết nối lại</button><button class="btn" type="button" id="btnTest">Gửi tin thử</button></div>
-          <p class="small muted" id="chatMsg" style="margin:0"></p>
-          <details class="small"><summary>Cách nối với nhân viên</summary>
-            <ol style="padding-left:18px;margin:6px 0">
-              <li>Nhân viên mở app LAN Chat, vào Danh bạ, tìm tên bot (hoặc mã số #) và gửi lời mời kết bạn.</li>
-              <li>Bấm <b>Đồng ý</b> ở ô “Lời mời kết bạn” bên cạnh.</li>
-              <li>Từ đó, mỗi đơn mới được gửi vào cuộc trò chuyện với bot, mã hóa đầu‑cuối. Nhân viên nhắn <b>don</b>, <b>xn DH0001</b>, <b>giao DH0001</b>, <b>huy DH0001</b>, <b>doanh thu</b> để xử lý đơn ngay trong chat.</li>
-            </ol></details>
-        </form>
-      </div>
-      <div style="display:grid;gap:16px;align-content:start">
-        <div class="card">
-          <div class="card-h"><h2 style="font-size:17px">Lời mời kết bạn</h2></div>
-          <div class="card-b list" id="incoming"></div>
-        </div>
-        <div class="card">
-          <div class="card-h"><h2 style="font-size:17px">Nhân viên nhận thông báo</h2></div>
-          <div class="card-b list" id="friends"></div>
-        </div>
-        <div class="card">
-          <div class="card-h"><h2 style="font-size:17px">Mời nhân viên</h2></div>
-          <div class="card-b" style="display:grid;gap:8px">
-            <div class="tools"><input class="in" id="qUser" placeholder="Tìm tên hoặc mã #1001"><button class="btn" id="btnFind" type="button">Tìm</button></div>
-            <div class="list" id="found"></div>
-          </div>
-        </div>
-      </div>
-    </section>
+    </div>
   </main>
 </div>
-
-<div class="modal-bg hidden" id="modal"><div class="modal card"><div class="card-h"><h2 style="font-size:17px" id="mTitle"></h2><button class="btn sm ghost" id="mClose" aria-label="Đóng">✕</button></div><div class="card-b" id="mBody"></div></div></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const money = n => n.toLocaleString('vi-VN') + 'đ';
-const dt = t => new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 const hms = t => new Date(t).toLocaleTimeString('vi-VN');
-const fold = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
-const ROLE = { quay: '🛒 Quầy mua hàng', admin: '📋 Quản lý' };
-let PIN = '', S = { orders: [], statuses: {}, payments: {}, lanchat: {}, network: {} }, tab = 'orders', unseen = 0, es = null;
+const ROLE = { xem: '🌐 Trang kết nối', admin: '🖧 Quản lý' };
+let PIN = '', N = {}, es = null, lockTimer = null;
 try { PIN = sessionStorage.getItem('pin') || ''; } catch { }
 
 function toast(title, text = '') {
   const el = document.createElement('div');
   el.className = 'toast';
   el.innerHTML = `<b>${esc(title)}</b>${text ? `<span class="muted small">${esc(text)}</span>` : ''}`;
-  $('#toasts').append(el);
-  setTimeout(() => el.remove(), 7000);
-}
-
-function beep() {
-  try {
-    const a = new (window.AudioContext || window.webkitAudioContext)();
-    [0, .18].forEach((d, i) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = i ? 1046 : 784; g.gain.value = .12;
-      o.connect(g).connect(a.destination); o.start(a.currentTime + d); o.stop(a.currentTime + d + .15); });
-  } catch { }
+  $('#toasts').append(el); setTimeout(() => el.remove(), 5000);
 }
 
 async function api(path, body) {
@@ -208,17 +134,14 @@ async function api(path, body) {
 
 function logout() { try { sessionStorage.removeItem('pin'); } catch { } es?.close(); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
 
-let lockTimer = null;
 function lockCountdown(sec) {
   clearInterval(lockTimer);
   const btn = $('#loginForm button');
   const tick = () => {
     if (sec <= 0) { clearInterval(lockTimer); btn.disabled = false; $('#loginErr').textContent = 'Đã mở khóa, hãy nhập lại mã PIN.'; return; }
-    btn.disabled = true;
-    $('#loginErr').textContent = `Nhập sai mã PIN nhiều lần. Thử lại sau ${sec--} giây`;
+    btn.disabled = true; $('#loginErr').textContent = `Nhập sai mã PIN nhiều lần. Thử lại sau ${sec--} giây`;
   };
-  tick();
-  lockTimer = setInterval(tick, 1000);
+  tick(); lockTimer = setInterval(tick, 1000);
 }
 
 $('#showPin').onchange = e => { $('#pin').style.webkitTextSecurity = e.target.checked ? 'none' : 'disc'; };
@@ -230,220 +153,84 @@ $('#loginForm').onsubmit = async e => {
 };
 
 async function start() {
-  S = await api('data');
+  const d = await api('data');
   try { sessionStorage.setItem('pin', PIN); } catch { }
   $('#loginView').classList.add('hidden');
   $('#app').classList.remove('hidden');
-  $('#shopName').textContent = S.shopName + ' · Quản lý';
-  document.title = S.shopName + ' · Quản lý';
-  $('#fStatus').innerHTML = '<option value="">Mọi trạng thái</option>' + Object.entries(S.statuses).filter(([k]) => k !== 'cho_tt').map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
-  fillChatForm();
-  renderAll();
-  connect();
+  $('#title').textContent = d.title + ' · Quản lý';
+  $('#cTitle').value = d.title;
+  N = d.network; $('#cUrl').value = N.lanchat.url;
+  render(); connect();
 }
 
-// ---------- Hiển thị ----------
-function renderAll() { renderStats(); renderOrders(); renderCustomers(); renderNetwork(); renderChat(); }
-
-function customers() {
-  const map = new Map();
-  for (const o of [...S.orders].sort((a, b) => a.paidAt - b.paidAt)) {
-    const c = map.get(o.customer.phone) || { phone: o.customer.phone, orders: [], spent: 0 };
-    c.name = o.customer.name; c.address = o.customer.address; c.last = o.paidAt;
-    c.orders.push(o);
-    if (o.status !== 'huy') c.spent += o.total;
-    map.set(c.phone, c);
-  }
-  return [...map.values()].sort((a, b) => b.last - a.last);
-}
-
-function renderStats() {
-  const ok = S.orders.filter(o => o.status !== 'huy');
-  $('#sOrders').textContent = S.orders.length;
-  $('#sNew').textContent = S.orders.filter(o => o.status === 'moi').length;
-  $('#sCust').textContent = new Set(S.orders.map(o => o.customer.phone)).size;
-  $('#sRev').textContent = money(ok.reduce((s, o) => s + o.total, 0));
-}
-
-const match = (o, q) => !q || fold([o.id, o.customer.name, o.customer.phone, o.customer.address].join(' ')).includes(fold(q));
-
-function renderOrders(flashId) {
-  const q = $('#qOrders').value, st = $('#fStatus').value;
-  const list = S.orders.filter(o => match(o, q) && (!st || o.status === st)).sort((a, b) => b.paidAt - a.paidAt);
-  $('#orderRows').innerHTML = list.map(o => `<tr data-id="${o.id}" class="${o.id === flashId ? 'flash' : ''}">
-    <td><b>#${o.id}</b></td><td class="num">${dt(o.paidAt)}</td>
-    <td><a href="#" data-cust="${esc(o.customer.phone)}"><b>${esc(o.customer.name)}</b></a><br><span class="muted small">${esc(o.customer.phone)} · ${esc(o.customer.address)}</span></td>
-    <td class="small">${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join('<br>')}</td>
-    <td class="num"><b>${money(o.total)}</b></td><td class="small">${esc(S.payments[o.payment])}</td>
-    <td><select class="status st-${o.status}" data-status="${o.id}" aria-label="Trạng thái đơn ${o.id}">${Object.entries(S.statuses).filter(([k]) => k !== 'cho_tt').map(([k, v]) => `<option value="${k}" ${k === o.status ? 'selected' : ''}>${v}</option>`).join('')}</select></td></tr>`).join('')
-    || `<tr><td colspan="7" class="muted" style="text-align:center;padding:30px">${S.orders.length ? 'Không có đơn khớp tìm kiếm.' : 'Chưa có đơn nào. Mở trang quầy (/) trên máy khác để đặt thử.'}</td></tr>`;
-}
-
-function renderCustomers() {
-  const q = fold($('#qCust').value);
-  const list = customers().filter(c => !q || fold(c.name + ' ' + c.phone + ' ' + c.address).includes(q));
-  $('#custRows').innerHTML = list.map(c => `<tr class="cust" data-cust="${esc(c.phone)}"><td><b>${esc(c.name)}</b></td><td class="num">${esc(c.phone)}</td>
-    <td class="small">${esc(c.address)}</td><td class="num">${c.orders.length}</td><td class="num"><b>${money(c.spent)}</b></td><td class="num small">${dt(c.last)}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="muted" style="text-align:center;padding:30px">Chưa có khách hàng.</td></tr>';
-}
-
-function showCustomer(phone) {
-  const c = customers().find(x => x.phone === phone);
-  if (!c) return;
-  $('#mTitle').textContent = c.name;
-  $('#mBody').innerHTML = `<dl class="kv"><dt>Điện thoại</dt><dd>${esc(c.phone)}</dd><dt>Địa chỉ</dt><dd>${esc(c.address)}</dd>
-    <dt>Số đơn</dt><dd>${c.orders.length}</dd><dt>Đã mua</dt><dd>${money(c.spent)}</dd></dl>
-    <h3 style="font-size:15px;margin:16px 0 8px">Lịch sử mua hàng</h3>
-    <div class="list">${[...c.orders].reverse().map(o => `<div class="row"><div class="grow"><b>#${o.id}</b> · <span class="small muted">${dt(o.paidAt)}</span><br>
-      <span class="small">${o.items.map(i => `${esc(i.name)} × ${i.qty}`).join(', ')}</span></div>
-      <div style="text-align:right"><b class="num">${money(o.total)}</b><br><span class="badge st-${o.status}">${esc(S.statuses[o.status])}</span></div></div>`).join('')}</div>`;
-  $('#modal').classList.remove('hidden');
-}
-
-function chatState(s) {
-  return { online: ['on', 'Đã kết nối'], connecting: ['wait', 'Đang kết nối'], error: ['off', 'Lỗi kết nối'], off: ['', 'Đang tắt'] }[s] || ['', '—'];
-}
-
-function renderNetwork() {
-  const n = S.network || {}, lc = S.lanchat || {}, h = n.lanchat?.health || {};
-  const devices = n.devices || [];
-  const quay = devices.filter(d => d.role === 'quay').length, admin = devices.filter(d => d.role === 'admin').length;
-  const [cs] = chatState(lc.state);
+function render() {
+  const c = N.lanchat || {}, devices = N.devices || [], connectList = N.connect || [];
+  const viewers = devices.filter(d => d.role === 'xem').length;
+  $('#dChat').className = 'dot ' + (c.ok ? 'on' : 'off');
+  $('#tChat').textContent = 'LAN Chat: ' + (c.ok ? 'đang chạy' : 'chưa kết nối được');
+  $('#sChat').innerHTML = c.ok ? '<span style="color:var(--ok)">Đang chạy</span>' : '<span style="color:var(--bad)">Tắt</span>';
+  $('#sAddr').textContent = connectList.length;
+  $('#sDev').textContent = viewers;
+  const up = N.uptime || 0;
+  $('#sUp').textContent = up < 3600 ? Math.floor(up / 60) + ' phút' : Math.floor(up / 3600) + ' giờ ' + Math.floor(up % 3600 / 60) + ' phút';
+  $('#updated').textContent = 'Cập nhật ' + hms(Date.now());
   $('#diagram').innerHTML = `
-    <div class="node ${quay ? 'on' : 'off'}">🛒 Quầy<small>${quay} thiết bị</small></div><span class="arrow">⇄</span>
-    <div class="node on">🖥️ Máy chủ cửa hàng<small>${esc(n.hostname || '')}:${n.port || ''}</small></div><span class="arrow">⇄</span>
-    <div class="node ${admin ? 'on' : 'off'}">📋 Quản lý<small>${admin} thiết bị</small></div><span class="arrow">⇄</span>
-    <div class="node ${cs === 'on' ? 'on' : 'off'}">🔒 LAN Chat<small>${esc(lc.friends?.length ?? 0)} nhân viên nhận tin</small></div>`;
-  $('#netUpdated').textContent = 'Cập nhật ' + hms(Date.now());
-  const up = n.uptime || 0;
-  $('#srvInfo').innerHTML = `<dt>Tên máy</dt><dd>${esc(n.hostname)}</dd><dt>Cổng</dt><dd>${esc(n.port)}</dd>
-    <dt>Đã chạy</dt><dd>${Math.floor(up / 3600)} giờ ${Math.floor(up % 3600 / 60)} phút</dd>` +
-    (n.addresses || []).map(a => `<dt>${esc(a.iface)}</dt><dd><a href="http://${esc(a.ip)}:${n.port}/" target="_blank" rel="noopener">http://${esc(a.ip)}:${n.port}/</a><br><span class="small muted">mặt nạ ${esc(a.netmask)} · MAC ${esc(a.mac)}</span></dd>`).join('')
-    || '<dt>Mạng</dt><dd>Không thấy card mạng nào (máy chưa vào Wi‑Fi/LAN)</dd>';
-  $('#chatHealthBadge').innerHTML = h.at ? `<span class="badge ${h.ok ? 'st-da_giao' : 'st-huy'}">${h.ok ? 'Đang chạy' : 'Không phản hồi'}</span>` : '';
-  $('#chatInfo').innerHTML = `<dt>Địa chỉ</dt><dd>${esc(lc.url)}</dd><dt>Bot</dt><dd>${esc(lc.name)}${lc.id ? ' · #' + lc.id : ''}</dd>
-    <dt>Trạng thái bot</dt><dd>${chatState(lc.state)[1]}${lc.message ? ' · ' + esc(lc.message) : ''}</dd>` +
-    (h.ok ? `<dt>Địa chỉ LAN</dt><dd>${(h.lan || []).map(esc).join('<br>') || '—'}</dd><dt>Internet</dt><dd>${esc(h.public || 'chưa bật')}</dd><dt>Mã máy chủ</dt><dd class="mono">${esc(h.id)}</dd>`
-      : h.at ? `<dt>Lỗi</dt><dd>${esc(h.error)}</dd>` : '') + (h.at ? `<dt>Kiểm tra lúc</dt><dd>${hms(h.at)}</dd>` : '');
+    <div class="node ${viewers ? 'on' : ''}">📱 Máy trong LAN<small>${viewers} đang xem địa chỉ</small></div><span class="arrow">→</span>
+    <div class="node on">🌐 Trang địa chỉ<small>${esc(N.hostname)}:${N.port}</small></div><span class="arrow">→</span>
+    <div class="node ${c.ok ? 'on' : 'off'}">🔒 Máy chủ LAN Chat<small>${c.ok ? esc(connectList[0]?.host || '') : 'chưa chạy'}</small></div>`;
+  $('#chatBadge').innerHTML = `<span class="badge ${c.ok ? 'st-da_giao' : 'st-huy'}">${c.ok ? 'Đang chạy' : 'Không kết nối được'}</span>`;
+  $('#chatInfo').innerHTML = `<dt>Đang dùng</dt><dd>${esc(c.url)}</dd>` + (c.ok
+    ? `<dt>IP chính</dt><dd>${esc(c.ip)}</dd><dt>Cổng HTTPS</dt><dd>${esc(c.port)}</dd><dt>Internet</dt><dd>${esc(c.public || 'chưa bật')}</dd><dt>Mã máy chủ</dt><dd class="mono">${esc(c.id)}</dd>`
+    : `<dt>Lỗi</dt><dd style="color:var(--bad)">${esc(c.error)}</dd>`) + (c.at ? `<dt>Kiểm tra lúc</dt><dd>${hms(c.at)}</dd>` : '');
+  $('#connect').innerHTML = connectList.map(a => `<div class="row"><div class="grow"><b class="mono">${esc(a.host)}</b><br><span class="small muted">${a.kind === 'lan' ? 'Mạng LAN' : 'Internet'} · ${esc(a.url)}</span></div>
+    <a class="btn sm" href="${esc(a.url)}" target="_blank" rel="noopener">Mở</a></div>`).join('')
+    || '<p class="muted small" style="margin:0">Chưa có địa chỉ: máy chủ LAN Chat chưa chạy hoặc sai địa chỉ ở trên.</p>';
+  $('#ifaces').innerHTML = (N.addresses || []).map(a => `<div class="row"><div class="grow"><b>${esc(a.iface)}</b>${a.virtual ? ' <span class="badge st-xac_nhan">ảo</span>' : ''}<br>
+    <span class="small muted mono">${esc(a.ip)} · mặt nạ ${esc(a.netmask)} · MAC ${esc(a.mac)}</span></div>
+    <a class="btn sm" href="http://${esc(a.ip)}:${N.port}/" target="_blank" rel="noopener">Trang địa chỉ</a></div>`).join('')
+    || '<p class="muted small" style="margin:0">Máy chưa vào Wi‑Fi / mạng LAN.</p>';
   $('#devCount').textContent = devices.length + ' thiết bị';
-  $('#devRows').innerHTML = devices.sort((a, b) => a.since - b.since).map(d => `<tr><td>${ROLE[d.role]}</td><td class="mono">${esc(d.ip)}</td><td>${esc(d.device)}</td><td class="num">${hms(d.since)}</td></tr>`).join('')
+  $('#devRows').innerHTML = [...devices].sort((a, b) => a.since - b.since).map(d => `<tr><td>${ROLE[d.role]}</td><td class="mono">${esc(d.ip)}</td><td>${esc(d.device)}</td><td class="num">${hms(d.since)}</td></tr>`).join('')
     || '<tr><td colspan="4" class="muted">Không có thiết bị nào.</td></tr>';
 }
 
-function fillChatForm() { const l = S.lanchat; $('#cUrl').value = l.url || ''; $('#cName').value = l.name || ''; $('#cOn').checked = l.enabled !== false; }
+$('#cfgForm').onsubmit = async e => {
+  e.preventDefault(); $('#cfgErr').textContent = '';
+  try { N = await api('config', { url: $('#cUrl').value, title: $('#cTitle').value }); $('#cUrl').value = N.lanchat.url; render(); toast(N.lanchat.ok ? 'Đã lưu, máy chủ LAN Chat đang chạy' : 'Đã lưu nhưng chưa kết nối được', N.lanchat.error || ''); }
+  catch (err) { $('#cfgErr').textContent = err.message; }
+};
+$('#btnCheck').onclick = async () => { try { N = await api('check', {}); render(); toast(N.lanchat.ok ? 'Máy chủ LAN Chat đang chạy' : 'Chưa kết nối được', N.lanchat.error || ''); } catch (err) { toast('Lỗi', err.message); } };
 
-function renderChat() {
-  const l = S.lanchat || {};
-  const [cls, label] = chatState(l.state);
-  $('#chatBadge').innerHTML = `<span class="pill"><i class="dot ${cls}"></i>${label}</span>`;
-  $('#chatMsg').textContent = (l.id ? `Bot "${l.name}" có mã số #${l.id}. ` : '') + (l.message || '') + (l.pending ? ` · ${l.pending} tin đang chờ gửi` : '');
-  $('#incoming').innerHTML = (l.incoming || []).map(u => `<div class="row"><div class="grow"><b>${esc(u.name)}</b> <span class="muted small">#${u.id}</span></div>
-    <button class="btn sm ok" data-friend="${u.id}" data-act="accept">Đồng ý</button><button class="btn sm" data-friend="${u.id}" data-act="decline">Từ chối</button></div>`).join('')
-    || '<p class="muted small" style="margin:0">Chưa có lời mời. Nhân viên tìm tên bot trong app LAN Chat để gửi lời mời.</p>';
-  $('#friends').innerHTML = (l.friends || []).map(u => `<div class="row"><i class="dot ${u.online ? 'on' : ''}"></i><div class="grow"><b>${esc(u.name)}</b> <span class="muted small">#${u.id} · ${u.online ? 'đang trực tuyến' : 'ngoại tuyến'}</span></div>
-    <button class="btn sm" data-friend="${u.id}" data-act="remove">Bỏ</button></div>`).join('')
-    || '<p class="muted small" style="margin:0">Chưa có nhân viên nào. Đơn mới chỉ hiện ở trang này.</p>';
-  const [c, t] = chatState(l.state);
-  $('#dChat').className = 'dot ' + c;
-  $('#tChat').textContent = `LAN Chat: ${t.toLowerCase()}${l.state === 'online' ? ` · ${l.friends?.length || 0} người nhận` : ''}`;
-}
-
-function presence(p) {
-  $('#dQuay').className = 'dot ' + (p.quay ? 'on' : 'off');
-  $('#tQuay').textContent = p.quay ? `Quầy: ${p.quay} đang kết nối` : 'Quầy: chưa mở';
-  $('#tLast').textContent = p.lastOrderAt ? `Đơn gần nhất: #${p.lastOrderId} lúc ${hms(p.lastOrderAt)}` : 'Chưa có đơn từ lúc máy chủ chạy';
-}
-
-function setTab(t) {
-  tab = t;
-  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
-  document.querySelectorAll('[data-view]').forEach(v => v.classList.toggle('hidden', v.dataset.view !== t));
-  if (t === 'orders') { unseen = 0; badge(); }
-}
-function badge() { $('#newCnt').textContent = unseen; $('#newCnt').classList.toggle('hidden', !unseen); document.title = (unseen ? `(${unseen}) ` : '') + S.shopName + ' · Quản lý'; }
-
-// ---------- Sự kiện ----------
-document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-tab],[data-cust],[data-friend],#mClose,#modal');
-  if (!t) return;
-  if (t.dataset.tab) return setTab(t.dataset.tab);
-  if (t.dataset.cust) { e.preventDefault(); return showCustomer(t.dataset.cust); }
-  if (t.id === 'mClose' || (t.id === 'modal' && e.target === t)) return $('#modal').classList.add('hidden');
-  if (t.dataset.friend) {
-    t.disabled = true;
-    try { S.lanchat = await api('lanchat/friend', { id: +t.dataset.friend, action: t.dataset.act }); renderChat(); renderNetwork();
-      if (t.dataset.act === 'request') toast('Đã gửi lời mời kết bạn', 'Nhân viên cần bấm đồng ý trong app LAN Chat'); }
-    catch (err) { toast('Không thực hiện được', err.message); t.disabled = false; }
-  }
-});
-document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#modal').classList.add('hidden'); });
-
-document.addEventListener('change', async e => {
-  const id = e.target.dataset?.status;
-  if (!id) return;
+$('#btnScan').onclick = async () => {
+  const btn = $('#btnScan');
+  btn.disabled = true; btn.textContent = 'Đang quét…';
+  $('#scanBar').classList.remove('hidden'); $('#scanBar i').style.width = '2%';
+  $('#scanResult').innerHTML = '';
   try {
-    const o = await api(`orders/${id}/status`, { status: e.target.value });
-    Object.assign(S.orders.find(x => x.id === id), o);
-    renderAll();
-    toast(`Đơn #${id} → ${S.statuses[o.status]}`);
-  } catch (err) { toast('Không đổi được trạng thái', err.message); renderOrders(); }
+    const d = await api('scan', {});
+    $('#scanResult').innerHTML = d.found.map(f => `<div class="row"><div class="grow"><b class="mono">${esc(f.url.replace('https://', ''))}</b><br>
+      <span class="small muted">Mã máy chủ ${esc(f.id)} · ${(f.lan || []).length} địa chỉ</span></div>
+      <button class="btn sm primary" data-use="${esc(f.url)}">Dùng máy chủ này</button></div>`).join('')
+      || `<p class="muted small" style="margin:0">Không tìm thấy máy chủ nào trong ${d.total} địa chỉ. Kiểm tra máy chủ LAN Chat đã bật và mở cổng 8443 (cai-dat-may-chu.bat).</p>`;
+  } catch (err) { toast('Không quét được', err.message); }
+  finally { btn.disabled = false; btn.textContent = '🔍 Quét lại'; $('#scanBar').classList.add('hidden'); }
+};
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-use]');
+  if (t) { $('#cUrl').value = t.dataset.use; $('#cfgForm').requestSubmit(); }
 });
-$('#qOrders').oninput = () => renderOrders();
-$('#fStatus').onchange = () => renderOrders();
-$('#qCust').oninput = renderCustomers;
-
-$('#chatForm').onsubmit = async e => {
-  e.preventDefault();
-  $('#chatErr').textContent = '';
-  try { S.lanchat = await api('lanchat/config', { url: $('#cUrl').value, name: $('#cName').value, enabled: $('#cOn').checked }); renderChat(); toast('Đã lưu, đang kết nối lại LAN Chat'); }
-  catch (err) { $('#chatErr').textContent = err.message; }
-};
-$('#btnTest').onclick = async () => {
-  try { const d = await api('lanchat/test', {}); toast(d.sent ? `Đã gửi tin thử cho ${d.sent} nhân viên` : 'Chưa có nhân viên nào để gửi', d.sent ? 'Mở app LAN Chat để xem' : 'Hãy đồng ý lời mời kết bạn trước'); }
-  catch (err) { toast('Không gửi được', err.message); }
-};
-$('#btnFind').onclick = async () => {
-  try {
-    const { users } = await api('lanchat/users?q=' + encodeURIComponent($('#qUser').value));
-    const REL = { friend: 'Đã là bạn', outgoing: 'Đã mời', incoming: 'Đang mời bot' };
-    $('#found').innerHTML = users.map(u => `<div class="row"><div class="grow"><b>${esc(u.name)}</b> <span class="muted small">#${u.id}</span></div>
-      ${u.relation === 'none' ? `<button class="btn sm" data-friend="${u.id}" data-act="request">Mời kết bạn</button>` : `<span class="muted small">${REL[u.relation]}</span>`}</div>`).join('')
-      || '<p class="muted small" style="margin:0">Không tìm thấy tài khoản.</p>';
-  } catch (err) { toast('Không tìm được', err.message); }
-};
-$('#qUser').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#btnFind').click(); } };
 
 function connect() {
   es?.close();
   es = new EventSource('/api/events?role=admin&pin=' + encodeURIComponent(PIN));
-  es.onopen = async () => {
-    $('#dServer').className = 'dot on'; $('#tServer').textContent = 'Quản lý: đã kết nối máy chủ';
-    try { const d = await api('data'); S.orders = d.orders; renderAll(); } catch { } // lấy lại đơn có thể bị lỡ khi mất mạng
-  };
+  es.onopen = () => { $('#dHub').className = 'dot on'; $('#tHub').textContent = 'Đã kết nối'; };
   es.onerror = () => {
-    $('#dServer').className = 'dot off'; $('#tServer').textContent = 'Mất kết nối máy chủ · đang thử lại…';
-    // Máy chủ từ chối (ví dụ mã PIN đã đổi): kiểm tra lại một lần, sai thì về màn hình nhập PIN
+    $('#dHub').className = 'dot off'; $('#tHub').textContent = 'Mất kết nối · đang thử lại…';
     if (es.readyState === EventSource.CLOSED) setTimeout(() => api('data').then(connect, () => {}), 3000);
   };
-  es.addEventListener('presence', e => presence(JSON.parse(e.data)));
-  es.addEventListener('order', e => {
-    const o = JSON.parse(e.data);
-    if (S.orders.some(x => x.id === o.id)) return;
-    S.orders.push(o);
-    if (tab !== 'orders' || document.hidden) unseen++;
-    badge(); renderStats(); renderOrders(o.id); renderCustomers();
-    beep();
-    toast(`🛒 Đơn mới #${o.id}`, `${o.customer.name} · ${money(o.total)} · lúc ${hms(o.paidAt)}`);
-  });
-  es.addEventListener('update', e => {
-    const o = JSON.parse(e.data), cur = S.orders.find(x => x.id === o.id);
-    if (cur) Object.assign(cur, o); else S.orders.push(o);
-    renderStats(); renderOrders(); renderCustomers();
-  });
-  es.addEventListener('lanchat', e => { S.lanchat = JSON.parse(e.data); renderChat(); });
-  es.addEventListener('network', e => { S.network = JSON.parse(e.data); S.lanchat = S.network.lanchat; renderNetwork(); renderChat(); });
+  es.addEventListener('network', e => { N = JSON.parse(e.data); render(); });
+  es.addEventListener('scan', e => { const s = JSON.parse(e.data); $('#scanBar i').style.width = Math.round(s.done / s.total * 100) + '%'; });
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && tab === 'orders') { unseen = 0; badge(); } });
 
 if (PIN) start().catch(() => logout()); else logout();
 </script>

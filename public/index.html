@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kết nối máy chủ LAN</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .hero { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; }
+  @media (max-width: 720px) { .hero { grid-template-columns: 1fr; text-align: center; } .hero .qrbox { margin: 0 auto; } }
+  .qrbox { padding: 12px; background: #fff; border-radius: 14px; border: 1px solid var(--border); width: max-content; }
+  .qrbox svg { display: block; width: 220px; height: 220px; }
+  .addr { font: 800 clamp(24px, 6vw, 40px)/1.15 ui-monospace, Consolas, monospace; letter-spacing: .02em; word-break: break-all; }
+  .label { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  @media (max-width: 720px) { .actions { justify-content: center; } }
+  .list { display: grid; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); flex-wrap: wrap; }
+  .row .grow { flex: 1; min-width: 180px; }
+  .steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .empty { text-align: center; padding: 30px 16px; }
+  .empty .big { font-size: 44px; }
+</style>
+</head>
+<body>
+<div class="statusbar">
+  <div class="brand">🌐 <span id="title">Kết nối máy chủ LAN</span></div>
+  <span class="pill"><i class="dot wait" id="dHub"></i><span id="tHub">Đang kết nối…</span></span>
+  <span class="pill"><i class="dot" id="dChat"></i><span id="tChat">Máy chủ LAN Chat: —</span></span>
+  <span class="pill muted small" id="tChecked"></span>
+</div>
+
+<main class="wrap" style="display:grid;gap:16px;max-width:900px">
+  <section class="card" id="mainCard">
+    <div class="card-b" id="main"><p class="muted">Đang lấy địa chỉ máy chủ…</p></div>
+  </section>
+
+  <section class="card hidden" id="otherCard">
+    <div class="card-h"><h2 style="font-size:17px">Địa chỉ khác của máy chủ</h2><span class="muted small">Dùng khi địa chỉ chính không vào được</span></div>
+    <div class="card-b list" id="others"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2 style="font-size:17px">Cách kết nối</h2></div>
+    <div class="card-b">
+      <ol class="steps">
+        <li>Máy của bạn phải dùng <b>cùng Wi‑Fi / mạng LAN</b> với máy chủ.</li>
+        <li>Điện thoại: mở camera quét mã QR. Máy tính: bấm <b>Mở LAN Chat</b> hoặc gõ địa chỉ vào trình duyệt.</li>
+        <li>Lần đầu, bấm <b>Cài chứng chỉ</b> và cài vào máy để trình duyệt không báo “kết nối không an toàn”. Chưa cài thì chọn <i>Nâng cao → Tiếp tục</i>.</li>
+        <li>Trong app LAN Chat bản GitHub Pages: bấm <b>Kết nối máy chủ LAN</b> và nhập địa chỉ IP ở trên.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="qrcode.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hms = t => new Date(t).toLocaleTimeString('vi-VN');
+
+function toast(title) {
+  const el = document.createElement('div');
+  el.className = 'toast'; el.innerHTML = `<b>${esc(title)}</b>`;
+  $('#toasts').append(el); setTimeout(() => el.remove(), 3000);
+}
+
+function qrSvg(text) {
+  const q = qrcode(0, 'M'); q.addData(text, 'Byte'); q.make();
+  return q.createSvgTag({ cellSize: 6, margin: 2, scalable: true, alt: 'Mã QR ' + text });
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { // trang http trong mạng LAN có thể không dùng được clipboard API
+    const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove();
+  }
+  toast('Đã sao chép ' + text);
+}
+
+const caUrl = url => url.replace(/\/?$/, '/') + 'ca.crt';
+const KIND = { lan: 'Mạng LAN', public: 'Internet' };
+
+function render(d) {
+  document.title = d.title;
+  $('#title').textContent = d.title;
+  $('#dChat').className = 'dot ' + (d.ok ? 'on' : 'off');
+  $('#tChat').textContent = d.ok ? 'Máy chủ LAN Chat: đang chạy' : 'Máy chủ LAN Chat: chưa kết nối được';
+  $('#tChecked').textContent = d.checkedAt ? 'Kiểm tra lúc ' + hms(d.checkedAt) : '';
+  const [main, ...rest] = d.addresses;
+  if (!main) {
+    $('#main').innerHTML = `<div class="empty"><div class="big">🔌</div><h2>Chưa tìm thấy máy chủ LAN Chat</h2>
+      <p class="muted">${esc(d.error || '')}</p><p class="small muted">Bật máy chủ LAN Chat (chay-may-chu.bat), trang này tự cập nhật sau vài giây.</p></div>`;
+    $('#otherCard').classList.add('hidden');
+    return;
+  }
+  $('#main').innerHTML = `<div class="hero">
+    <div class="qrbox">${qrSvg(main.url)}</div>
+    <div>
+      <div class="label">Địa chỉ IP để kết nối · ${KIND[main.kind]}</div>
+      <div class="addr" id="mainAddr">${esc(main.host)}</div>
+      <div class="muted mono small" style="margin-top:4px">${esc(main.url)}</div>
+      <div class="actions">
+        <a class="btn primary" href="${esc(main.url)}" target="_blank" rel="noopener">Mở LAN Chat</a>
+        <button class="btn" data-copy="${esc(main.host)}">📋 Sao chép IP</button>
+        <button class="btn" data-copy="${esc(main.url)}">🔗 Sao chép link</button>
+        ${main.kind === 'lan' ? `<a class="btn ghost" href="${esc(caUrl(main.url))}">🔐 Cài chứng chỉ</a>` : ''}
+      </div>
+    </div></div>`;
+  $('#otherCard').classList.toggle('hidden', !rest.length);
+  $('#others').innerHTML = rest.map(a => `<div class="row"><div class="grow"><b class="mono">${esc(a.host)}</b><br><span class="small muted">${KIND[a.kind]} · ${esc(a.url)}</span></div>
+    <button class="btn sm" data-copy="${esc(a.host)}">Sao chép</button><a class="btn sm" href="${esc(a.url)}" target="_blank" rel="noopener">Mở</a>
+    <button class="btn sm ghost" data-qr="${esc(a.url)}">Mã QR</button></div><div class="qrbox hidden" data-qrbox="${esc(a.url)}">${qrSvg(a.url)}</div>`).join('');
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-copy],[data-qr]');
+  if (!t) return;
+  if (t.dataset.copy) copy(t.dataset.copy);
+  if (t.dataset.qr) document.querySelector(`[data-qrbox="${CSS.escape(t.dataset.qr)}"]`).classList.toggle('hidden');
+});
+
+const es = new EventSource('/api/events');
+es.onopen = () => { $('#dHub').className = 'dot on'; $('#tHub').textContent = 'Đã kết nối trang địa chỉ'; };
+es.onerror = () => { $('#dHub').className = 'dot off'; $('#tHub').textContent = 'Mất kết nối · đang thử lại…'; };
+es.addEventListener('info', e => render(JSON.parse(e.data)));
+</script>
+</body>
+</html>

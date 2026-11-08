@@ -1,25 +1,23 @@
-# Cửa hàng LAN: quầy mua hàng + trang quản lý + LAN Chat
+# Máy chủ mạng LAN: trang cung cấp địa chỉ IP
 
-Chạy: bấm đúp `chay-cua-hang.bat` (hoặc `node server.js`). Cần Node.js 18 trở lên, không phải cài thư viện.
+Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR** để các máy khác kết nối tới máy chủ
+[LAN Chat bảo mật & ký số PDF](https://github.com/Thanhesssd/hethongungdungchatbaomat-kysopdf).
 
-| Trang | Địa chỉ |
-|---|---|
-| Quầy mua hàng | `http://localhost:3000/` · máy khác: `http://<IP máy chủ>:3000/` |
-| Trang quản lý | `http://localhost:3000/quan-ly` (mã PIN in ở cửa sổ máy chủ, lưu trong `data/config.json`) |
+Chạy: bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần Node.js 18 trở lên, không phải cài thư viện.
 
+| Trang | Địa chỉ | Dùng để |
+|---|---|---|
+| Trang kết nối | `http://localhost:3000/`, máy khác: `http://<IP máy này>:3000/` | Xem IP máy chủ LAN Chat, quét mã QR, sao chép link, cài chứng chỉ |
+| Trang quản lý | `http://localhost:3000/quan-ly` | Đặt địa chỉ máy chủ LAN Chat, tự tìm máy chủ trong LAN, xem card mạng và thiết bị đang mở trang |
+
+Mã PIN trang quản lý in ở cửa sổ máy chủ và lưu trong `data/config.json` (mục `adminPin`).
 Máy khác cùng Wi‑Fi không vào được thì chạy `mo-cong-mang.bat` một lần để mở cổng 3000.
 
-## Kết nối với LAN Chat (repo hethongungdungchatbaomat-kysopdf)
+## Cách hoạt động
 
-1. Chạy máy chủ LAN Chat (`ui/ui/ui/chay-may-chu.bat` bên repo đó).
-2. Trang quản lý → tab **LAN Chat** → nhập địa chỉ (`http://localhost:8000` nếu cùng máy, `https://<IP>:8443` nếu khác máy) → **Lưu và kết nối lại**. App tự tạo tài khoản bot.
-3. Nhân viên mở app LAN Chat, tìm tên bot, gửi lời mời kết bạn → bấm **Đồng ý** trong trang quản lý.
-4. Mỗi đơn mới được gửi vào chat, mã hóa đầu‑cuối. Nhân viên nhắn `don`, `ma DH0001`, `xn DH0001`, `giao DH0001`, `huy DH0001`, `doanh thu`.
+1. Trang địa chỉ hỏi máy chủ LAN Chat (`/api/health`) mỗi 15 giây để lấy danh sách IP của nó.
+2. Trang kết nối hiện địa chỉ Wi‑Fi/LAN thật lên đầu, card mạng ảo (VMware, Hyper‑V) xuống cuối.
+3. Máy chủ LAN Chat đổi IP thì trang tự cập nhật, mã QR cũng đổi theo.
 
-## Sửa dữ liệu
-
-- `products.json`: bảng giá (đang là **giá mẫu**, thay bằng giá thật). Sửa xong tải lại trang quầy.
-- `data/config.json`: tên cửa hàng, PIN, tài khoản ngân hàng (`bank.bin` là mã BIN ngân hàng, `bank.account` là số tài khoản; điền đủ thì mã QR là VietQR thật).
-- `data/orders.json`: đơn hàng đã lưu.
-
-Đây là bản demo: nút "Khách đã thanh toán xong" thay cho việc ngân hàng báo tiền về.
+Mặc định trang tìm máy chủ LAN Chat ở `http://localhost:8000` (cùng máy). Nếu máy chủ LAN Chat chạy ở máy khác,
+vào trang quản lý, bấm **Bắt đầu quét** hoặc nhập `IP:8443`.
