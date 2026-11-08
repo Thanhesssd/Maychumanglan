@@ -59,7 +59,10 @@ const STATUS = { pending: 'Chờ cấp quyền', approved: 'Đã cấp quyền',
 const hashPassword = (password, salt) => crypto.scryptSync(String(password), salt, 32).toString('hex');
 const tokenKey = token => crypto.createHash('sha256').update(String(token)).digest('hex');
 const hasAdmin = () => db.users.some(u => u.role === 'admin' && u.status === 'approved');
-const findUser = username => db.users.find(u => u.username === String(username || '').trim().toLowerCase());
+// "Nguyễn Duy Thanh" -> "nguyen.duy.thanh": bỏ dấu, chữ thường, dấu cách thành dấu chấm (giống trang đăng ký)
+const normUsername = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd')
+  .toLowerCase().trim().replace(/\s+/g, '.').replace(/[^a-z0-9._-]/g, '').replace(/\.{2,}/g, '.').replace(/^[._-]+|[._-]+$/g, '');
+const findUser = username => db.users.find(u => u.username === normUsername(username));
 
 function publicUser(u) {
   return { id: u.id, username: u.username, name: u.name, role: u.role, status: u.status, statusLabel: STATUS[u.status],
@@ -305,7 +308,7 @@ async function route(req, res) {
 
   if (req.method === 'POST' && p === '/api/auth/register') {
     const b = await readBody(req);
-    const username = String(b.username || '').trim().toLowerCase();
+    const username = normUsername(b.username);
     const name = String(b.name || '').trim().replace(/\s+/g, ' ');
     const password = String(b.password || '');
     if (!/^[a-z0-9._-]{3,32}$/.test(username)) return json(res, { error: 'Tên đăng nhập 3–32 ký tự: chữ không dấu, số, dấu . _ -', field: 'username' }, 400);
@@ -339,7 +342,7 @@ async function route(req, res) {
 
   if (req.method === 'POST' && p === '/api/auth/login') {
     const b = await readBody(req);
-    const key = 'login:' + clientIp(req) + ':' + String(b.username || '').toLowerCase();
+    const key = 'login:' + clientIp(req) + ':' + normUsername(b.username);
     if (locked(key)) return json(res, { error: `Sai mật khẩu nhiều lần. Thử lại sau ${locked(key)} giây`, wait: locked(key) }, 429);
     const u = findUser(b.username);
     const ok = u && crypto.timingSafeEqual(Buffer.from(u.hash, 'hex'), Buffer.from(hashPassword(b.password || '', u.salt), 'hex'));

@@ -66,7 +66,8 @@ if (location.protocol === 'file:') document.write(
     <div class="note hidden" id="inviteNote" style="background:var(--ok-bg);color:var(--ok)"></div>
     <form id="authForm" style="display:grid;gap:10px" novalidate>
       <label class="field reg hidden">Họ và tên<input class="in" id="fName" autocomplete="name" maxlength="60"></label>
-      <label class="field">Tên đăng nhập<input class="in" id="fUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32" placeholder="vd: thanh.nguyen"></label>
+      <label class="field">Tên đăng nhập<input class="in" id="fUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="60" placeholder="vd: thanh.nguyen"></label>
+      <div class="small muted hidden" id="userHint" style="margin-top:-6px"></div>
       <label class="field">Mật khẩu<input class="in" id="fPass" type="password" autocomplete="current-password" maxlength="200"></label>
       <label class="field reg hidden">Nhập lại mật khẩu<input class="in" id="fPass2" type="password" autocomplete="new-password" maxlength="200"></label>
       <div class="err" id="authErr" role="alert"></div>
@@ -142,12 +143,33 @@ function setMode(m) {
   $('#btnAuth').textContent = m === 'register' ? (needSetup && onServer ? 'Tạo tài khoản quản trị' : 'Đăng ký') : 'Đăng nhập';
   $('#authErr').textContent = '';
 }
-$$('[data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$$('[data-mode]').forEach(b => b.onclick = () => { setMode(b.dataset.mode); showUserHint(); });
+
+// Tên đăng nhập được tự chuyển như máy chủ: "Nguyễn Duy Thanh" -> "nguyen.duy.thanh"
+const normUsername = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd')
+  .toLowerCase().trim().replace(/\s+/g, '.').replace(/[^a-z0-9._-]/g, '').replace(/\.{2,}/g, '.').replace(/^[._-]+|[._-]+$/g, '');
+let userTouched = false;
+function showUserHint() {
+  const raw = $('#fUser').value, u = normUsername(raw), hint = $('#userHint');
+  if (!raw.trim()) return hint.classList.add('hidden');
+  hint.classList.remove('hidden');
+  if (u.length < 3 || u.length > 32) { hint.style.color = 'var(--bad)'; hint.textContent = 'Tên đăng nhập cần 3–32 ký tự (chữ, số).'; return; }
+  hint.style.color = '';
+  hint.innerHTML = u === raw.trim() ? '' : `Tên đăng nhập sẽ là: <b class="mono">${esc(u)}</b>`;
+  if (!hint.innerHTML) hint.classList.add('hidden');
+}
+$('#fUser').addEventListener('input', () => { userTouched = true; showUserHint(); });
+// Đăng ký: tự gợi ý tên đăng nhập từ họ tên nếu người dùng chưa tự gõ
+$('#fName').addEventListener('input', () => {
+  if (mode !== 'register' || userTouched) return;
+  $('#fUser').value = normUsername($('#fName').value).slice(0, 32);
+  showUserHint();
+});
 
 $('#authForm').onsubmit = async e => {
   e.preventDefault();
   $('#authErr').textContent = '';
-  const body = { username: $('#fUser').value, password: $('#fPass').value };
+  const body = { username: normUsername($('#fUser').value), password: $('#fPass').value };
   if (mode === 'register') {
     if ($('#fPass').value !== $('#fPass2').value) { $('#authErr').textContent = 'Hai mật khẩu không khớp'; return $('#fPass2').focus(); }
     body.name = $('#fName').value;
@@ -158,7 +180,7 @@ $('#authForm').onsubmit = async e => {
     const d = await api('auth/' + mode, body);
     me = d.user;
     if (inviteInfo) { inviteInfo = null; history.replaceState(null, '', location.pathname); }
-    $('#authForm').reset();
+    $('#authForm').reset(); userTouched = false; $('#userHint').classList.add('hidden');
     toast(mode === 'register' ? 'Đã tạo tài khoản' : 'Đăng nhập thành công', me.status === 'approved' ? '' : 'Đang chờ quản trị viên cấp quyền');
     enter();
   } catch (err) {
