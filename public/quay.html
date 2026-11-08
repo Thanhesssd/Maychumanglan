@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quầy mua hàng</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .layout { display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .cats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cat { border: 1px solid var(--border); background: var(--panel); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-weight: 600; }
+  .cat[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .prod { padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .prod .ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: var(--panel-2); border: 1px solid var(--border); }
+  .prod h3 { font-size: 15px; }
+  .prod .price { font-weight: 800; color: var(--primary); font-size: 17px; margin-top: auto; }
+  .cart { position: sticky; top: 56px; }
+  .line { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 0; border-bottom: 1px dashed var(--border); }
+  .qty { display: inline-flex; align-items: center; gap: 6px; }
+  .qty button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; font-weight: 700; }
+  .total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 800; padding: 12px 0; }
+  .form { display: grid; gap: 10px; }
+  .pay { display: grid; gap: 8px; }
+  .pay label { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: var(--panel-2); }
+  .pay label:has(input:checked) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+  .center { max-width: 520px; margin: 24px auto; text-align: center; }
+  .qrbox { display: inline-block; padding: 12px; background: #fff; border-radius: 12px; border: 1px solid var(--border); }
+  .qrbox svg, .qrbox img { display: block; width: 240px; height: 240px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; text-align: left; margin: 14px auto; max-width: 380px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-weight: 700; }
+  .sim { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--warn); background: var(--warn-bg); color: var(--warn); border-radius: 10px; font-size: 13px; }
+  .big-ok { font-size: 54px; line-height: 1; }
+  .flow { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 16px 0; font-size: 13px; }
+  .flow span { padding: 4px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+  .flow span.done { background: var(--ok-bg); color: var(--ok); border-color: transparent; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="statusbar">
+  <div class="brand">🛒 <span id="shopName">Quầy mua hàng</span></div>
+  <span class="pill"><i class="dot wait" id="dServer"></i><span id="tServer">Đang kết nối máy chủ…</span></span>
+  <span class="pill"><i class="dot" id="dAdmin"></i><span id="tAdmin">Quản lý: —</span></span>
+  <span class="pill"><i class="dot" id="dChat"></i><span id="tChat">LAN Chat: —</span></span>
+  <span class="pill muted" id="tLast">Chưa gửi đơn nào</span>
+</div>
+
+<main class="wrap">
+  <!-- Bước 1: chọn hàng -->
+  <section id="stepShop" class="layout">
+    <div>
+      <div class="cats" id="cats" role="group" aria-label="Danh mục"></div>
+      <div class="grid" id="grid"></div>
+      <p class="muted small" id="priceNote"></p>
+    </div>
+    <aside class="card cart">
+      <div class="card-h"><h2 style="font-size:17px">Giỏ hàng</h2><span class="muted small" id="cartCount">0 món</span></div>
+      <div class="card-b">
+        <div id="lines"><p class="muted">Chưa có sản phẩm. Bấm “Thêm” để chọn hàng.</p></div>
+        <div class="total"><span>Tổng cộng</span><span class="num" id="total">0đ</span></div>
+        <form class="form" id="form" novalidate>
+          <label class="field">Họ và tên<input class="in" id="fName" autocomplete="name" required></label>
+          <label class="field">Số điện thoại<input class="in" id="fPhone" inputmode="tel" autocomplete="tel" placeholder="09xxxxxxxx" required></label>
+          <label class="field">Địa chỉ giao hàng<textarea class="in" id="fAddr" rows="2" autocomplete="street-address" required></textarea></label>
+          <div class="field">Cách thanh toán
+            <div class="pay">
+              <label><input type="radio" name="pay" value="qr" checked> 📱 Quét mã QR</label>
+              <label><input type="radio" name="pay" value="bank"> 🏦 Chuyển khoản</label>
+              <label><input type="radio" name="pay" value="cod"> 🚚 Thanh toán khi nhận hàng</label>
+            </div>
+          </div>
+          <label class="check"><input type="checkbox" id="fAdult"> Tôi xác nhận đã đủ 18 tuổi. Sản phẩm thuốc lá có hại cho sức khỏe.</label>
+          <div class="err" id="err" role="alert"></div>
+          <button class="btn primary block" id="btnOrder" type="submit">Đặt hàng</button>
+        </form>
+      </div>
+    </aside>
+  </section>
+
+  <!-- Bước 2: thanh toán -->
+  <section id="stepPay" class="card center hidden">
+    <div class="card-b">
+      <h2>Thanh toán đơn <span id="payId"></span></h2>
+      <p class="muted" id="payHint"></p>
+      <div id="qrWrap" class="qrbox hidden"></div>
+      <dl class="kv" id="bankInfo"></dl>
+      <div class="sim" id="simNote">Bản demo: chưa nối với ngân hàng. Nhân viên quầy bấm nút dưới đây khi thấy tiền đã về, thay cho thông báo từ ngân hàng.</div>
+      <div style="display:grid;gap:8px;margin-top:14px">
+        <button class="btn ok block" id="btnPaid">✔ Khách đã thanh toán xong</button>
+        <button class="btn ghost block" id="btnBack">Quay lại sửa đơn</button>
+      </div>
+      <div class="err" id="payErr" role="alert"></div>
+    </div>
+  </section>
+
+  <!-- Bước 3: hoàn tất -->
+  <section id="stepDone" class="card center hidden">
+    <div class="card-b">
+      <div class="big-ok">✅</div>
+      <h2 style="margin-top:8px">Đã gửi đơn <span id="doneId"></span></h2>
+      <p class="muted" id="doneText"></p>
+      <div class="flow" aria-label="Luồng đơn hàng">
+        <span class="done">Khách đặt</span>→<span class="done">Đã thanh toán</span>→<span id="fAdminStep">Quản lý nhận</span>→<span id="fChatStep">Báo LAN Chat</span>
+      </div>
+      <p>Trạng thái: <span class="badge st-moi" id="doneStatus">Mới</span></p>
+      <button class="btn primary" id="btnNew">Đơn mới</button>
+    </div>
+  </section>
+</main>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="qrcode.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = n => n.toLocaleString('vi-VN') + 'đ';
+const time = t => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const ICON = { 'Cigar': '🟤', 'Thuốc lá': '🚬', 'Phụ kiện': '🔥' };
+let info = { products: [] }, cat = 'Tất cả', cart = {}, pending = null;
+
+function toast(title, text = '') {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<b>${esc(title)}</b>${text ? `<span class="muted small">${esc(text)}</span>` : ''}`;
+  $('#toasts').append(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Máy chủ không phản hồi');
+  return d;
+}
+
+function show(step) { for (const s of ['#stepShop', '#stepPay', '#stepDone']) $(s).classList.toggle('hidden', s !== step); scrollTo(0, 0); }
+
+function renderProducts() {
+  const cats = ['Tất cả', ...new Set(info.products.map(p => p.category || 'Khác'))];
+  $('#cats').innerHTML = cats.map(c => `<button class="cat" aria-pressed="${c === cat}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
+  const list = info.products.filter(p => cat === 'Tất cả' || (p.category || 'Khác') === cat);
+  $('#grid').innerHTML = list.map(p => `<div class="card prod">
+      <div class="ico" aria-hidden="true">${ICON[p.category] || '📦'}</div>
+      <h3>${esc(p.name)}</h3><span class="muted small">${esc(p.category || '')}${p.unit ? ' · ' + esc(p.unit) : ''}</span>
+      <div class="price num">${money(p.price)}</div>
+      <button class="btn primary sm" data-add="${esc(p.id)}">+ Thêm</button></div>`).join('') || '<p class="muted">Chưa có sản phẩm trong bảng giá.</p>';
+}
+
+function renderCart() {
+  const ids = Object.keys(cart).filter(id => info.products.some(p => p.id === id));
+  let total = 0, count = 0;
+  $('#lines').innerHTML = ids.map(id => {
+    const p = info.products.find(x => x.id === id), q = cart[id];
+    total += p.price * q; count += q;
+    return `<div class="line"><b>${esc(p.name)}</b><span class="num">${money(p.price * q)}</span>
+      <span class="qty"><button type="button" data-dec="${esc(id)}" aria-label="Bớt">−</button><span class="num">${q}</span><button type="button" data-inc="${esc(id)}" aria-label="Thêm">+</button></span>
+      <span class="muted small num">${money(p.price)} / ${esc(p.unit || 'món')}</span></div>`;
+  }).join('') || '<p class="muted">Chưa có sản phẩm. Bấm “Thêm” để chọn hàng.</p>';
+  $('#total').textContent = money(total);
+  $('#cartCount').textContent = count + ' món';
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-cat],[data-add],[data-inc],[data-dec]');
+  if (!t) return;
+  if (t.dataset.cat) { cat = t.dataset.cat; renderProducts(); }
+  if (t.dataset.add) { cart[t.dataset.add] = (cart[t.dataset.add] || 0) + 1; renderCart(); toast('Đã thêm vào giỏ', info.products.find(p => p.id === t.dataset.add)?.name); }
+  if (t.dataset.inc) { cart[t.dataset.inc] = Math.min(99, cart[t.dataset.inc] + 1); renderCart(); }
+  if (t.dataset.dec) { if (--cart[t.dataset.dec] <= 0) delete cart[t.dataset.dec]; renderCart(); }
+});
+
+$('#form').onsubmit = async e => {
+  e.preventDefault();
+  $('#err').textContent = '';
+  const items = Object.entries(cart).map(([id, qty]) => ({ id, qty }));
+  if (!items.length) return ($('#err').textContent = 'Giỏ hàng đang trống');
+  const payment = document.querySelector('input[name=pay]:checked').value;
+  $('#btnOrder').disabled = true;
+  try {
+    const d = await api('/api/orders', { items, payment, adult: $('#fAdult').checked,
+      customer: { name: $('#fName').value, phone: $('#fPhone').value, address: $('#fAddr').value } });
+    pending = { ...d, payment };
+    if (payment === 'cod') return await markPaid();
+    renderPay();
+    show('#stepPay');
+  } catch (err) { $('#err').textContent = err.message; }
+  finally { $('#btnOrder').disabled = false; }
+};
+
+function renderPay() {
+  const p = pending, bank = info.bank || {};
+  $('#payId').textContent = '#' + p.id;
+  $('#payErr').textContent = '';
+  const rows = [['Số tiền', money(p.total)], ['Nội dung CK', p.note]];
+  if (bank.bankName || bank.account) rows.unshift(['Ngân hàng', bank.bankName || '—'], ['Số tài khoản', bank.account || '—'], ['Chủ tài khoản', bank.owner || '—']);
+  else rows.unshift(['Tài khoản', 'Chưa cài đặt (điền mục "bank" trong data/config.json)']);
+  $('#bankInfo').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  const qr = $('#qrWrap');
+  if (p.payment === 'qr') {
+    const q = qrcode(0, 'M');
+    q.addData(p.qr || `Thanh toan ${p.id} - ${p.total} VND - ${p.note}`, 'Byte');
+    q.make();
+    qr.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    qr.classList.remove('hidden');
+    $('#payHint').textContent = p.qr ? 'Mời khách mở app ngân hàng và quét mã VietQR dưới đây.' : 'Mã QR minh họa: chưa có số tài khoản thật nên app ngân hàng sẽ không nhận mã này.';
+  } else {
+    qr.classList.add('hidden');
+    $('#payHint').textContent = 'Mời khách chuyển khoản theo thông tin dưới đây, ghi đúng nội dung để đối soát.';
+  }
+}
+
+async function markPaid() {
+  $('#btnPaid').disabled = true;
+  try {
+    const d = await api(`/api/orders/${pending.id}/paid`, { secret: pending.secret });
+    $('#doneId').textContent = '#' + d.id;
+    $('#doneText').textContent = `Đơn đã gửi sang phía quản lý lúc ${time(d.paidAt)}. ` +
+      (d.admins ? `${d.admins} trang quản lý đang mở đã nhận ngay.` : 'Hiện chưa có trang quản lý nào mở, đơn đã được lưu và sẽ hiện khi mở.');
+    $('#fAdminStep').className = d.admins ? 'done' : '';
+    $('#fChatStep').className = d.lanchat ? 'done' : '';
+    $('#fChatStep').textContent = d.lanchat ? `Báo LAN Chat (${d.lanchat} người)` : 'LAN Chat: chưa có người nhận';
+    setStatus('moi', 'Mới');
+    pending.done = d.id;
+    cart = {}; renderCart(); $('#form').reset();
+    show('#stepDone');
+  } catch (err) { $('#payErr').textContent = err.message; $('#err').textContent = err.message; }
+  finally { $('#btnPaid').disabled = false; }
+}
+
+function setStatus(st, label) { const b = $('#doneStatus'); b.className = 'badge st-' + st; b.textContent = label; }
+
+$('#btnPaid').onclick = markPaid;
+$('#btnBack').onclick = async () => {
+  api(`/api/orders/${pending.id}/abandon`, { secret: pending.secret }).catch(() => {});
+  pending = null;
+  show('#stepShop');
+};
+$('#btnNew').onclick = () => { pending = null; show('#stepShop'); };
+
+// ---------- Kết nối thời gian thực ----------
+function presence(p) {
+  $('#dAdmin').className = 'dot ' + (p.admin ? 'on' : 'off');
+  $('#tAdmin').textContent = p.admin ? `Quản lý: ${p.admin} đang trực tuyến` : 'Quản lý: chưa mở';
+  const chat = { online: ['on', 'đã kết nối'], connecting: ['wait', 'đang kết nối'], error: ['off', 'lỗi kết nối'], off: ['', 'đang tắt'] }[p.lanchat] || ['', '—'];
+  $('#dChat').className = 'dot ' + chat[0];
+  $('#tChat').textContent = 'LAN Chat: ' + chat[1];
+  $('#tLast').textContent = p.lastOrderAt ? `Đơn gửi gần nhất: #${p.lastOrderId} lúc ${time(p.lastOrderAt)}` : 'Chưa gửi đơn nào';
+}
+
+function connect() {
+  const es = new EventSource('/api/events?role=quay');
+  es.onopen = () => { $('#dServer').className = 'dot on'; $('#tServer').textContent = 'Quầy: đã kết nối máy chủ'; };
+  es.onerror = () => { $('#dServer').className = 'dot off'; $('#tServer').textContent = 'Mất kết nối máy chủ · đang thử lại…'; };
+  es.addEventListener('presence', e => presence(JSON.parse(e.data)));
+  es.addEventListener('order-status', e => {
+    const d = JSON.parse(e.data);
+    if (pending?.done === d.id) { setStatus(d.status, d.label); toast(`Đơn #${d.id}: ${d.label}`, 'Cập nhật từ phía quản lý'); }
+  });
+}
+
+(async () => {
+  try {
+    info = await api('/api/info');
+    document.title = info.shopName + ' · Quầy';
+    $('#shopName').textContent = info.shopName;
+    $('#priceNote').textContent = 'Giá lấy trực tiếp từ bảng giá trên máy chủ cửa hàng (products.json).';
+    presence(info.presence);
+  } catch (err) { toast('Không tải được bảng giá', err.message); }
+  renderProducts(); renderCart(); connect();
+})();
+</script>
+</body>
+</html>

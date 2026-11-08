@@ -1,0 +1,15 @@
+{
+  "_ghi_chu": "GIÁ MẪU. Thay bằng bảng giá thật của công ty. Sửa file này rồi tải lại trang quầy, không cần khởi động lại máy chủ.",
+  "products": [
+    { "id": "cg-robusto-5", "name": "Cigar Robusto (hộp 5 điếu)", "category": "Cigar", "price": 1250000, "unit": "hộp" },
+    { "id": "cg-corona-1", "name": "Cigar Corona (điếu lẻ)", "category": "Cigar", "price": 180000, "unit": "điếu" },
+    { "id": "cg-churchill-10", "name": "Cigar Churchill (hộp 10 điếu)", "category": "Cigar", "price": 3900000, "unit": "hộp" },
+    { "id": "cg-cigarillo-20", "name": "Cigarillo hương vani (hộp 20)", "category": "Cigar", "price": 320000, "unit": "hộp" },
+    { "id": "tl-bao-a", "name": "Thuốc lá điếu loại A (bao 20)", "category": "Thuốc lá", "price": 35000, "unit": "bao" },
+    { "id": "tl-cay-b", "name": "Thuốc lá điếu loại B (cây 10 bao)", "category": "Thuốc lá", "price": 330000, "unit": "cây" },
+    { "id": "tl-soi-40", "name": "Thuốc lá sợi cuốn tay (gói 40g)", "category": "Thuốc lá", "price": 120000, "unit": "gói" },
+    { "id": "pk-dao", "name": "Dao cắt cigar", "category": "Phụ kiện", "price": 250000, "unit": "cái" },
+    { "id": "pk-khò", "name": "Bật lửa khò", "category": "Phụ kiện", "price": 290000, "unit": "cái" },
+    { "id": "pk-humidor", "name": "Hộp giữ ẩm humidor mini", "category": "Phụ kiện", "price": 1800000, "unit": "hộp" }
+  ]
+}
