@@ -5,7 +5,7 @@ Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR
 
 ## 🔗 Link truy cập app
 
-**https://introduction-bibliography-light-coaches.trycloudflare.com**
+**https://vegetable-dense-requesting-grand.trycloudflare.com**
 
 Mở được trên Chrome ở mọi nơi (Wi‑Fi, 4G). Link chỉ hoạt động khi máy chủ đang bật, và **đổi mỗi lần bật lại đường hầm**:
 khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu code; app chạy trên máy chủ của chủ sở hữu.
@@ -13,7 +13,11 @@ khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu 
 ## Chạy máy chủ
 
 1. Bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần Node.js 18 trở lên, không phải cài thư viện.
-2. Muốn người ngoài mạng LAN mở được: cài một lần `winget install --id Cloudflare.cloudflared`, rồi bấm đúp
+   Luôn mở qua `http://localhost:3000/`, không mở thẳng file HTML.
+2. Lần đầu: bấm đúp `tao-quan-tri.bat` để tạo tài khoản quản trị (hoặc đăng ký tại `http://localhost:3000/` trên máy chủ).
+3. Bật máy chủ LAN Chat (`chay-may-chu.bat` bên repo LAN Chat). Ở trang quản trị, ô **Địa chỉ máy chủ LAN Chat**
+   để `http://localhost:8000` nếu cùng máy, hoặc `IP:8443` nếu khác máy.
+4. Muốn người ngoài mạng LAN mở được: cài một lần `winget install --id Cloudflare.cloudflared`, rồi bấm đúp
    `chia-se-internet.bat`. Cửa sổ in ra link `https://….trycloudflare.com`; giữ cửa sổ mở thì link còn chạy.
 
 | Trang | Địa chỉ | Dùng để |

@@ -422,7 +422,15 @@ async function route(req, res) {
     if (req.method === 'POST' && p === '/api/admin/config') {
       const b = await readBody(req);
       const u = normUrl(b.url);
-      try { new URL(u); } catch { return json(res, { error: 'Địa chỉ không hợp lệ' }, 400); }
+      let parsed;
+      try { parsed = new URL(u); } catch { return json(res, { error: 'Địa chỉ không hợp lệ' }, 400); }
+      // Hay nhập nhầm link của chính app này (link mời, link trycloudflare, cổng 3000) vào ô máy chủ LAN Chat
+      const own = new Set(['localhost', '127.0.0.1', ...lanAddresses().map(a => a.ip)]);
+      const pub = publicUrl();
+      if (parsed.searchParams.has('moi') || (pub && parsed.host === new URL(pub).host)
+        || (own.has(parsed.hostname) && +(parsed.port || (parsed.protocol === 'https:' ? 443 : 80)) === PORT)) {
+        return json(res, { error: 'Đây là link của chính trang đăng ký này, không phải máy chủ LAN Chat. Cùng máy thì nhập http://localhost:8000, khác máy thì nhập IP:8443 (hoặc bấm Bắt đầu quét)' }, 400);
+      }
       const title = String(b.title || '').trim().slice(0, 60);
       config.lanchat.url = u;
       if (title) config.title = title;
