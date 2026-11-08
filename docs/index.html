@@ -37,8 +37,15 @@
     const url = (await r.text()).trim();
     if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url)) throw new Error('Chưa có link');
     const target = url.replace(/\/?$/, '/') + location.search; // giữ ?moi=… của link mời
-    go.href = target; go.hidden = false;
     document.getElementById('link').textContent = url;
+    // Thử kết nối trước: đường hầm cũ đã tắt thì tên miền bị xóa, chuyển sang sẽ gặp trang lỗi DNS
+    msg.textContent = 'Đang kiểm tra máy chủ…';
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 10000);
+    try { await fetch(url.replace(/\/?$/, '/') + 'api/auth/me', { mode: 'no-cors', cache: 'no-store', signal: ctl.signal }); }
+    catch { throw new Error('Không kết nối được'); }
+    finally { clearTimeout(timer); }
+    go.href = target; go.hidden = false;
     msg.textContent = 'Đang chuyển tới app… Nếu không tự chuyển, bấm nút bên dưới.';
     setTimeout(() => location.replace(target), 1200);
   } catch (e) {
