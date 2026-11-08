@@ -26,7 +26,11 @@
   <h1>Kết nối máy chủ LAN</h1>
   <p class="muted" id="msg">Đang tìm địa chỉ app…</p>
   <a class="btn" id="go" href="#" hidden>Mở app</a>
-  <button class="btn" id="retry" type="button" hidden style="border:0;cursor:pointer;font:inherit">🔄 Thử lại ngay</button>
+  <a class="btn" id="start" href="maychulan://start" hidden>⚡ Mở app (bật máy chủ)</a>
+  <button class="btn" id="retry" type="button" hidden style="border:0;cursor:pointer;font:inherit;background:transparent;color:var(--primary);border:1px solid var(--border)">🔄 Thử lại ngay</button>
+  <p class="muted" id="startNote" hidden style="font-size:13px">Nút <b>Mở app</b> tự chạy chương trình bật máy chủ khi bấm <b>trên chính máy chủ</b>
+    (đã cài một lần bằng <b>cai-nut-mo-app.bat</b>). Trình duyệt hỏi “Mở Khởi động máy chủ LAN?” thì bấm <b>Mở</b>.
+    Người dùng ở máy khác: chờ quản trị viên bật máy chủ, trang này tự vào app.</p>
   <p class="link" id="link"></p>
   <p class="muted">Đăng ký hoặc đăng nhập, chờ quản trị viên cấp quyền để nhận địa chỉ IP máy chủ LAN Chat.</p>
 </main>
@@ -34,12 +38,21 @@
 // Link app (đường hầm Cloudflare) đổi mỗi lần máy chủ bật lại; máy chủ tự cập nhật file link.txt này.
 // Máy chủ tắt thì trang tự thử lại mỗi 15 giây và tự nhận link mới khi máy chủ bật lại, không cần tải lại trang.
 const $ = id => document.getElementById(id);
-const msg = $('msg'), go = $('go'), retry = $('retry');
-let timer = null;
+const msg = $('msg'), go = $('go'), retry = $('retry'), start = $('start'), startNote = $('startNote');
+let timer = null, starting = false;
+
+// Bấm "Mở app" khi máy chủ tắt: trình duyệt mở link maychulan:// (chạy khoi-dong.bat trên máy chủ),
+// trang kiểm tra lại mỗi 5 giây trong 3 phút, máy chủ lên là tự vào app.
+start.onclick = () => {
+  starting = true;
+  msg.textContent = 'Đang bật máy chủ… Nếu trình duyệt hỏi “Mở Khởi động máy chủ LAN?”, hãy bấm Mở.';
+  setTimeout(() => { starting = false; }, 180000);
+  setTimeout(check, 5000);
+};
 
 async function check() {
   clearInterval(timer);
-  retry.hidden = true; go.hidden = true;
+  retry.hidden = true; go.hidden = true; start.hidden = true; startNote.hidden = true;
   msg.textContent = 'Đang kiểm tra máy chủ…';
   try {
     const r = await fetch('link.txt?t=' + Date.now(), { cache: 'no-store' });
@@ -58,13 +71,15 @@ async function check() {
     msg.textContent = 'Máy chủ đang chạy. Đang chuyển tới app…';
     setTimeout(() => location.replace(target), 800);
   } catch (e) {
-    let left = 15;
+    let left = starting ? 5 : 15;
     const tick = () => {
-      msg.innerHTML = '<span class="err">Máy chủ đang tắt hoặc chưa bật link Internet.</span><br>'
-        + `Tự thử lại sau <b>${left}</b> giây. Quản trị viên: bấm đúp <b>khoi-dong.bat</b> trên máy chủ.`;
+      msg.innerHTML = starting
+        ? `⏳ Đang chờ máy chủ khởi động (khoảng 30–60 giây)… Kiểm tra lại sau <b>${left}</b> giây.`
+        : '<span class="err">Máy chủ đang tắt hoặc chưa bật link Internet.</span><br>'
+          + `Tự thử lại sau <b>${left}</b> giây.`;
       if (left-- <= 0) check();
     };
-    retry.hidden = false;
+    retry.hidden = false; start.hidden = false; startNote.hidden = false;
     tick();
     timer = setInterval(tick, 1000);
   }

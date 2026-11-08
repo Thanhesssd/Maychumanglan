@@ -67,7 +67,19 @@ const findUser = username => db.users.find(u => u.username === normUsername(user
 
 function publicUser(u) {
   return { id: u.id, username: u.username, name: u.name, role: u.role, status: u.status, statusLabel: STATUS[u.status],
-    createdAt: u.createdAt, lastSeen: u.lastSeen, lastIp: u.lastIp, device: u.device, approvedBy: u.approvedBy, approvedAt: u.approvedAt };
+    createdAt: u.createdAt, lastSeen: u.lastSeen, lastIp: u.lastIp, device: u.device, approvedBy: u.approvedBy, approvedAt: u.approvedAt,
+    mustChange: !!u.mustChange, passwordChangedAt: u.passwordChangedAt || null };
+}
+
+function setPassword(u, password) {
+  u.salt = crypto.randomBytes(16).toString('hex');
+  u.hash = hashPassword(password, u.salt);
+  u.passwordChangedAt = Date.now();
+}
+// Mật khẩu tạm dễ đọc qua điện thoại: bỏ các ký tự dễ nhầm (0/O, 1/l/I)
+function tempPassword() {
+  const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from(crypto.randomBytes(10), b => abc[b % abc.length]).join('').replace(/(.{5})(.{5})/, '$1-$2');
 }
 
 function cookies(req) {
@@ -234,14 +246,15 @@ setInterval(() => { for (const c of clients) c.res.write(': ping\n\n'); }, 20000
 const userOf = c => db.users.find(u => u.id === c.uid);
 const isAdmin = u => u && u.role === 'admin' && u.status === 'approved';
 
-function pushInfo() { for (const c of clients) if (userOf(c)?.status === 'approved') send(c, 'info', info()); }
+const canSee = u => u && u.status === 'approved' && !u.mustChange;
+function pushInfo() { for (const c of clients) if (canSee(userOf(c))) send(c, 'info', info()); }
 function pushAdmin() { const d = adminData(); for (const c of clients) if (isAdmin(userOf(c))) send(c, 'admin', d); }
 function pushMe(uid) {
   for (const c of clients) {
     if (c.uid !== uid) continue;
     const u = userOf(c);
     send(c, 'me', u ? publicUser(u) : null);
-    if (u?.status === 'approved') send(c, 'info', info());
+    if (canSee(u)) send(c, 'info', info());
   }
 }
 
@@ -396,6 +409,29 @@ async function route(req, res) {
     return json(res, { user: publicUser(u) });
   }
 
+  // Tự đổi mật khẩu (cả khi vừa đăng nhập bằng mật khẩu tạm do quản trị viên đặt lại)
+  if (req.method === 'POST' && p === '/api/auth/password') {
+    if (!me) return json(res, { error: 'Cần đăng nhập' }, 401);
+    const b = await readBody(req);
+    const key = 'pass:' + me.id;
+    if (locked(key)) return json(res, { error: `Sai mật khẩu hiện tại nhiều lần. Thử lại sau ${locked(key)} giây` }, 429);
+    const ok = crypto.timingSafeEqual(Buffer.from(me.hash, 'hex'), Buffer.from(hashPassword(b.current || '', me.salt), 'hex'));
+    if (!ok) { failed(key); return json(res, { error: 'Mật khẩu hiện tại không đúng', field: 'current' }, 403); }
+    const next = String(b.next || '');
+    if (next.length < 6 || next.length > 200) return json(res, { error: 'Mật khẩu mới cần ít nhất 6 ký tự', field: 'next' }, 400);
+    if (next === b.current) return json(res, { error: 'Mật khẩu mới phải khác mật khẩu hiện tại', field: 'next' }, 400);
+    fails.delete(key);
+    setPassword(me, next);
+    delete me.mustChange;
+    // Đăng xuất các máy khác (có thể đang dùng mật khẩu cũ), giữ phiên ở máy này
+    endSessions(me.id);
+    startSession(res, me);
+    saveUsers();
+    log(`${me.username} đã đổi mật khẩu`);
+    pushAdmin();
+    return json(res, { user: publicUser(me) });
+  }
+
   if (req.method === 'POST' && p === '/api/auth/logout') {
     const token = cookies(req).sid;
     if (token) { sessions.delete(tokenKey(token)); saveSessions(); }
@@ -416,7 +452,7 @@ async function route(req, res) {
     const c = { res, uid: me.id, ip: clientIp(req), device: deviceName(req.headers['user-agent']), since: Date.now() };
     clients.add(c);
     send(c, 'me', publicUser(me));
-    if (me.status === 'approved') send(c, 'info', info());
+    if (canSee(me)) send(c, 'info', info());
     if (isAdmin(me)) send(c, 'admin', adminData());
     pushAdmin();
     req.on('close', () => { clients.delete(c); pushAdmin(); });
@@ -427,6 +463,7 @@ async function route(req, res) {
   if (req.method === 'GET' && p === '/api/info') {
     if (!me) return json(res, { error: 'Cần đăng nhập' }, 401);
     if (me.status !== 'approved') return json(res, { error: 'Tài khoản chưa được cấp quyền xem địa chỉ IP' }, 403);
+    if (me.mustChange) return json(res, { error: 'Hãy đổi mật khẩu tạm trước khi xem địa chỉ IP' }, 403);
     return json(res, info());
   }
 
@@ -521,9 +558,13 @@ async function route(req, res) {
       const b = await readBody(req);
       const u = db.users.find(x => x.id === +m[1]);
       if (!u) return json(res, { error: 'Không tìm thấy tài khoản' }, 404);
-      if (u.id === me.id && b.action !== 'approve') return json(res, { error: 'Không tự thu hồi, chặn hay xóa tài khoản của chính mình' }, 400);
+      if (u.id === me.id && b.action !== 'approve') return json(res, { error: b.action === 'reset-password'
+        ? 'Tự đổi mật khẩu của mình ở trang chủ (nút Đổi mật khẩu)' : 'Không tự thu hồi, chặn hay xóa tài khoản của chính mình' }, 400);
       const admins = db.users.filter(isAdmin).length;
+      let temp = null;
       switch (b.action) {
+        // Người dùng quên mật khẩu: tạo mật khẩu tạm, đăng xuất mọi máy, bắt đổi ngay lần đăng nhập tới
+        case 'reset-password': temp = tempPassword(); setPassword(u, temp); u.mustChange = true; endSessions(u.id); break;
         case 'approve': u.status = 'approved'; u.approvedBy = me.name; u.approvedAt = Date.now(); break;
         case 'revoke': u.status = 'pending'; break;
         case 'block': u.status = 'blocked'; endSessions(u.id); break;
@@ -535,9 +576,10 @@ async function route(req, res) {
       saveUsers();
       log(`${me.username}: ${b.action} → ${u.username}`);
       pushMe(u.id);
-      if (b.action === 'block' || b.action === 'delete') for (const c of clients) if (c.uid === u.id) c.res.end();
+      if (['block', 'delete', 'reset-password'].includes(b.action)) for (const c of clients) if (c.uid === u.id) c.res.end();
       pushAdmin();
-      return json(res, adminData());
+      // Mật khẩu tạm chỉ trả về một lần cho quản trị viên vừa bấm, không lưu dạng đọc được
+      return json(res, temp ? { ...adminData(), tempPassword: temp, tempFor: { name: u.name, username: u.username } } : adminData());
     }
   }
 

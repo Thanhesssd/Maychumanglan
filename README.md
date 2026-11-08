@@ -16,10 +16,16 @@ khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu 
 
 ## Chạy máy chủ
 
-**Cách nhanh nhất:** bấm đúp **`khoi-dong.bat`**. File này mở 4 cửa sổ: máy chủ LAN Chat, trang đăng ký,
-link Internet cho LAN Chat, link Internet cho trang đăng ký (tự cập nhật link GitHub cố định). Máy chủ LAN Chat
-được tìm ở `..\Dự án 02\ui\ui\ui`; ở chỗ khác thì đặt `"lanchatDir"` trong `data/config.json`.
-Muốn tự chạy khi bật máy: nhấn Win+R, gõ `shell:startup`, rồi kéo lối tắt của `khoi-dong.bat` vào thư mục đó.
+**Cách nhanh nhất:** bấm đúp **`khoi-dong.bat`**. Một cửa sổ chạy cả 4 phần: máy chủ LAN Chat, trang đăng ký,
+link Internet cho LAN Chat, link Internet cho trang đăng ký (tự cập nhật link GitHub cố định). Phần nào dừng bất ngờ
+thì tự bật lại. Máy chủ LAN Chat được tìm ở `..\Dự án 02\ui\ui\ui`; ở chỗ khác thì đặt `"lanchatDir"` trong `data/config.json`.
+
+**Để điện thoại nào (Wi‑Fi, 4G, 5G) bấm "Mở app" cũng vào được ngay:** máy chủ phải luôn chạy. Bấm đúp
+**`cai-tu-chay.bat`** một lần: máy chủ tự chạy mỗi khi bật máy và máy không ngủ khi cắm sạc. Gỡ: `go-tu-chay.bat`.
+Điện thoại không bật được máy tính từ xa, nên máy chủ tắt thì trang GitHub báo và tự vào app khi máy chủ lên lại.
+
+**Nút "Mở app" bật máy chủ (chỉ trên chính máy chủ):** bấm đúp `cai-nut-mo-app.bat` một lần. Khi máy chủ tắt,
+nút **⚡ Mở app** trên trang GitHub sẽ chạy `khoi-dong.bat` (trình duyệt hỏi trước). Gỡ: `go-nut-mo-app.bat`.
 
 Từng bước:
 
@@ -48,8 +54,12 @@ Từng bước:
    Người đó đăng ký qua link là được cấp quyền ngay. Link dùng một lần, hết hạn sau 7 ngày; khi đường hầm Internet
    đang bật, link mời dùng link Internet.
 
-Mật khẩu được băm bằng scrypt, không lưu dạng đọc được. Quên mật khẩu quản trị: tắt máy chủ, xóa `data/users.json`,
-bật lại rồi đăng ký lại trên máy chủ.
+6. **Đổi mật khẩu:** đăng nhập, bấm **🔑 Đổi mật khẩu** trên thanh trên cùng. Các máy khác đang đăng nhập sẽ bị đăng xuất.
+7. **Quên mật khẩu:** quản trị viên bấm **🔑 Đặt lại mật khẩu** cạnh tên người đó, rồi gửi **mật khẩu tạm** vừa hiện
+   (chỉ hiện một lần). Người đó đăng nhập bằng mật khẩu tạm và phải đặt mật khẩu mới trước khi xem được địa chỉ IP.
+
+Mật khẩu được băm bằng scrypt, không lưu dạng đọc được. Quản trị viên duy nhất quên mật khẩu: tắt máy chủ, xóa
+`data/users.json`, bật lại rồi tạo lại bằng `tao-quan-tri.bat` (mọi tài khoản sẽ mất, cần đăng ký lại).
 
 Máy khác cùng Wi‑Fi không vào được thì chạy `mo-cong-mang.bat` một lần để mở cổng 3000.
 

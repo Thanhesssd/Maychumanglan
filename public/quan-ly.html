@@ -396,7 +396,7 @@
       catch { // trang http trong mạng LAN có thể không dùng được clipboard API
         const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove();
       }
-      toast('Đã sao chép link mời', 'Dán vào Zalo hoặc tin nhắn để gửi đi');
+      toast('Đã sao chép', 'Dán vào Zalo hoặc tin nhắn để gửi đi');
     }
 
     function toast(title, text = '') {
@@ -430,9 +430,24 @@
     <button class="btn sm" data-copy="${esc(i.url)}">📋 Sao chép link</button><button class="btn sm ghost" data-cancel="${esc(i.token)}">Hủy</button></div>`).join('') : '';
     }
 
+    // Mật khẩu tạm chỉ hiện một lần: quản trị viên sao chép rồi gửi cho người dùng
+    function showTempPassword(who, pass) {
+      const box = document.createElement('div');
+      box.className = 'modal-bg';
+      box.innerHTML = `<div class="modal card"><div class="card-b" style="display:grid;gap:12px">
+        <h2 style="font-size:18px;margin:0">🔑 Mật khẩu tạm của ${esc(who.name)}</h2>
+        <p class="small muted" style="margin:0">Gửi cho <b>${esc(who.name)}</b> (tên đăng nhập <b class="mono">${esc(who.username)}</b>). Đăng nhập bằng mật khẩu này xong, họ phải đặt mật khẩu mới ngay.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="in mono" readonly value="${esc(pass)}" style="flex:1;min-width:180px;font-size:20px;letter-spacing:.08em;text-align:center" onclick="this.select()">
+          <button class="btn ok" type="button" data-copy="${esc(pass)}">📋 Sao chép</button></div>
+        <p class="small" style="margin:0;color:var(--warn)">Mật khẩu này chỉ hiện <b>một lần</b>. Đóng khung là không xem lại được; quên thì bấm Đặt lại mật khẩu lần nữa.</p>
+        <button class="btn primary" type="button" data-close>Đã gửi, đóng</button></div></div>`;
+      box.addEventListener('click', e => { if (e.target === box || e.target.closest('[data-close]')) box.remove(); });
+      document.body.append(box);
+    }
+
     const ACT = {
       approve: ['Cấp quyền', 'ok'], revoke: ['Thu hồi', ''], block: ['Chặn', ''], 'make-admin': ['Làm quản trị', ''],
-      'remove-admin': ['Bỏ quản trị', ''], delete: ['Xóa', 'ghost'],
+      'remove-admin': ['Bỏ quản trị', ''], 'reset-password': ['🔑 Đặt lại mật khẩu', ''], delete: ['Xóa', 'ghost'],
     };
     function actionsFor(u) {
       if (u.id === me.id) return '<span class="muted small">Tài khoản của bạn</span>';
@@ -440,7 +455,7 @@
       if (u.status !== 'approved') a.push('approve');
       if (u.status === 'approved') a.push('revoke');
       if (u.status !== 'blocked') a.push('block');
-      a.push(u.role === 'admin' ? 'remove-admin' : 'make-admin', 'delete');
+      a.push(u.role === 'admin' ? 'remove-admin' : 'make-admin', 'reset-password', 'delete');
       return `<div class="acts">${a.map(k => `<button class="btn sm ${ACT[k][1]}" data-uid="${u.id}" data-act="${k}">${ACT[k][0]}</button>`).join('')}</div>`;
     }
 
@@ -509,7 +524,13 @@
         if (t.dataset.act === 'delete' && !confirm(`Xóa tài khoản ${u.username}? Không hoàn tác được.`)) return;
         if (t.dataset.act === 'make-admin' && !confirm(`Cho ${u.name} quyền quản trị (cấp quyền, chặn, xóa người khác)?`)) return;
         t.disabled = true;
-        try { apply(await api('admin/users/' + u.id, { action: t.dataset.act })); toast(`${ACT[t.dataset.act][0]}: ${u.name}`); }
+        if (t.dataset.act === 'reset-password' && !confirm(`Đặt lại mật khẩu cho ${u.name}? Mật khẩu cũ hết dùng được, ${u.name} bị đăng xuất khỏi mọi máy và phải đổi mật khẩu ở lần đăng nhập tới.`)) return;
+        try {
+          const d = await api('admin/users/' + u.id, { action: t.dataset.act });
+          apply(d);
+          if (d.tempPassword) showTempPassword(d.tempFor, d.tempPassword);
+          else toast(`${ACT[t.dataset.act][0]}: ${u.name}`);
+        }
         catch (err) { toast('Không thực hiện được', err.message); t.disabled = false; }
         return;
       }
