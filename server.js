@@ -1,8 +1,8 @@
 'use strict';
 // Trang cung cấp địa chỉ IP mạng LAN để kết nối máy chủ LAN Chat
 // (https://github.com/Thanhesssd/hethongungdungchatbaomat-kysopdf).
-//   /         trang kết nối: địa chỉ IP, mã QR, link cài chứng chỉ
-//   /quan-ly  trang quản lý mạng LAN (có mã PIN)
+//   /         đăng ký, đăng nhập; người đã được cấp quyền thấy địa chỉ IP, mã QR
+//   /quan-ly  quản trị: cấp quyền tài khoản, quản lý mạng LAN
 // Chỉ dùng Node.js có sẵn, không cần cài thư viện.
 
 const http = require('http');
@@ -16,6 +16,9 @@ const ROOT = __dirname;
 const DATA = process.env.LAN_DATA || path.join(ROOT, 'data');
 const PUBLIC = path.join(ROOT, 'public');
 const CONFIG_FILE = path.join(DATA, 'config.json');
+const USERS_FILE = path.join(DATA, 'users.json');
+const SESSIONS_FILE = path.join(DATA, 'sessions.json');
+const SESSION_DAYS = 30;
 fs.mkdirSync(DATA, { recursive: true });
 
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } };
@@ -33,18 +36,81 @@ function log(line) {
 const saved = readJson(CONFIG_FILE, {});
 const config = {
   port: 3000,
-  adminPin: String(crypto.randomInt(100000, 1000000)),
   title: 'Kết nối máy chủ LAN',
   ...saved,
   lanchat: { url: 'http://localhost:8000', ...(saved.lanchat || {}) },
 };
-// Bỏ các mục cũ của bản cửa hàng
-for (const k of ['shopName', 'bank']) delete config[k];
-delete config.lanchat.name; delete config.lanchat.password; delete config.lanchat.enabled;
+// Mã thiết lập: chỉ dùng khi tạo tài khoản quản trị đầu tiên (giữ số cũ của adminPin nếu có)
+config.setupCode = config.setupCode || config.adminPin || String(crypto.randomInt(100000, 1000000));
+for (const k of ['shopName', 'bank', 'adminPin']) delete config[k];
+for (const k of ['name', 'password', 'enabled']) delete config.lanchat[k];
 writeJson(CONFIG_FILE, config);
 const PORT = +process.env.PORT || config.port;
-if (process.env.ADMIN_PIN) config.adminPin = process.env.ADMIN_PIN;
 if (process.env.LANCHAT_URL) config.lanchat.url = process.env.LANCHAT_URL;
+
+// ---------- Tài khoản ----------
+const db = readJson(USERS_FILE, { seq: 0, users: [] });
+const saveUsers = () => writeJson(USERS_FILE, db);
+const sessions = new Map(Object.entries(readJson(SESSIONS_FILE, {})).filter(([, s]) => s.exp > Date.now()));
+const saveSessions = () => writeJson(SESSIONS_FILE, Object.fromEntries(sessions));
+const STATUS = { pending: 'Chờ cấp quyền', approved: 'Đã cấp quyền', blocked: 'Bị chặn' };
+
+const hashPassword = (password, salt) => crypto.scryptSync(String(password), salt, 32).toString('hex');
+const tokenKey = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+const hasAdmin = () => db.users.some(u => u.role === 'admin' && u.status === 'approved');
+const findUser = username => db.users.find(u => u.username === String(username || '').trim().toLowerCase());
+
+function publicUser(u) {
+  return { id: u.id, username: u.username, name: u.name, role: u.role, status: u.status, statusLabel: STATUS[u.status],
+    createdAt: u.createdAt, lastSeen: u.lastSeen, lastIp: u.lastIp, device: u.device, approvedBy: u.approvedBy, approvedAt: u.approvedAt };
+}
+
+function cookies(req) {
+  const out = {};
+  for (const part of (req.headers.cookie || '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+function currentUser(req) {
+  const token = cookies(req).sid;
+  if (!token) return null;
+  const s = sessions.get(tokenKey(token));
+  if (!s || s.exp < Date.now()) return null;
+  return db.users.find(u => u.id === s.uid) || null;
+}
+
+function touch(u, req) {
+  u.lastSeen = Date.now();
+  u.lastIp = clientIp(req);
+  u.device = deviceName(req.headers['user-agent']);
+}
+
+function startSession(res, u) {
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions.set(tokenKey(token), { uid: u.id, exp: Date.now() + SESSION_DAYS * 864e5 });
+  saveSessions();
+  res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}`);
+}
+
+function endSessions(uid) {
+  for (const [k, s] of sessions) if (s.uid === uid) sessions.delete(k);
+  saveSessions();
+}
+
+// Chống dò mật khẩu và đăng ký hàng loạt
+const fails = new Map();
+const signups = new Map();
+function locked(key) {
+  const f = fails.get(key);
+  return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0;
+}
+function failed(key) {
+  const f = fails.get(key) || { n: 0, until: 0 };
+  fails.set(key, f.n + 1 >= 5 ? { n: 0, until: Date.now() + 60000 } : { n: f.n + 1, until: 0 });
+}
 
 // ---------- Mạng LAN ----------
 function lanAddresses() {
@@ -101,12 +167,11 @@ async function checkChat() {
       : e.code === 'ENOTFOUND' ? 'Không tìm thấy địa chỉ này' : e.code === 'TIMEOUT' ? 'Máy chủ không phản hồi' : e.message;
     chat = { ok: false, at: Date.now(), error };
   }
-  broadcast('info', publicInfo());
-  broadcast('network', networkInfo(), 'admin');
+  pushInfo();
+  pushAdmin();
 }
 setInterval(checkChat, 15000);
 
-// Danh sách địa chỉ để các máy khác kết nối máy chủ LAN Chat
 function connectAddresses() {
   if (!chat.ok) return [];
   const list = (chat.lan || []).map(hp => ({ kind: 'lan', url: `https://${hp}/`, host: hp }));
@@ -116,23 +181,36 @@ function connectAddresses() {
   return list.sort((a, b) => virt.has(a.host.split(':')[0]) - virt.has(b.host.split(':')[0]));
 }
 
-function publicInfo() {
+function info() {
   return { title: config.title, ok: chat.ok, error: chat.ok ? null : chat.error, checkedAt: chat.at, id: chat.id || null, addresses: connectAddresses() };
 }
 
 // ---------- Kết nối thời gian thực (Server-Sent Events) ----------
-const clients = new Set();
+const clients = new Set(); // { res, uid, ip, device, since }
 const send = (c, event, data) => c.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-function broadcast(event, data, role) { for (const c of clients) if (!role || c.role === role) send(c, event, data); }
 setInterval(() => { for (const c of clients) c.res.write(': ping\n\n'); }, 20000);
+const userOf = c => db.users.find(u => u.id === c.uid);
+const isAdmin = u => u && u.role === 'admin' && u.status === 'approved';
+
+function pushInfo() { for (const c of clients) if (userOf(c)?.status === 'approved') send(c, 'info', info()); }
+function pushAdmin() { const d = adminData(); for (const c of clients) if (isAdmin(userOf(c))) send(c, 'admin', d); }
+function pushMe(uid) {
+  for (const c of clients) {
+    if (c.uid !== uid) continue;
+    const u = userOf(c);
+    send(c, 'me', u ? publicUser(u) : null);
+    if (u?.status === 'approved') send(c, 'info', info());
+  }
+}
 
 function networkInfo() {
   return {
     hostname: os.hostname(), port: PORT, uptime: Math.round(process.uptime()), addresses: lanAddresses(),
-    devices: [...clients].map(c => ({ role: c.role, ip: c.ip, device: c.device, since: c.since })),
+    devices: [...clients].map(c => ({ user: userOf(c)?.name || '—', username: userOf(c)?.username, ip: c.ip, device: c.device, since: c.since })),
     lanchat: { url: config.lanchat.url, ...chat }, connect: connectAddresses(),
   };
 }
+function adminData() { return { title: config.title, network: networkInfo(), users: db.users.map(publicUser), statuses: STATUS }; }
 
 // ---------- Tự tìm máy chủ LAN Chat trong mạng LAN (quét cổng 8443 trong dải /24) ----------
 let scanning = null;
@@ -153,7 +231,7 @@ async function scanLan(port = 8443) {
           const h = await getHealth(`https://${ip}:${port}`, 900);
           if (!found.some(f => f.id === h.id)) found.push({ id: h.id, url: `https://${ip}:${port}`, lan: h.lan, public: h.public });
         } catch { }
-        if (++done % 50 === 0) broadcast('scan', { done, total: targets.size }, 'admin');
+        if (++done % 50 === 0) for (const c of clients) if (isAdmin(userOf(c))) send(c, 'scan', { done, total: targets.size });
       }
     };
     await Promise.all(Array.from({ length: 64 }, worker));
@@ -176,20 +254,6 @@ function readBody(req) {
   });
 }
 
-// Chống đoán mã PIN quản lý
-const fails = new Map();
-function pinOk(req, pin) {
-  const ip = clientIp(req);
-  const f = fails.get(ip) || { n: 0, until: 0 };
-  if (f.until > Date.now()) return { locked: Math.ceil((f.until - Date.now()) / 1000) };
-  if (!pin) return false;
-  const a = Buffer.from(String(pin).trim()), b = Buffer.from(config.adminPin);
-  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-  if (ok) fails.delete(ip);
-  else fails.set(ip, f.n + 1 >= 5 ? { n: 0, until: Date.now() + 60000 } : { n: f.n + 1, until: 0 });
-  return ok;
-}
-
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const PAGES = { '/': 'index.html', '/quan-ly': 'quan-ly.html' };
 function serveStatic(res, urlPath) {
@@ -202,43 +266,142 @@ function serveStatic(res, urlPath) {
 async function route(req, res) {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  const me = currentUser(req);
 
-  if (p.startsWith('/api/admin/')) {
-    const ok = pinOk(req, req.headers['x-pin']);
-    if (ok?.locked) return json(res, { error: `Nhập sai mã PIN nhiều lần. Thử lại sau ${ok.locked} giây`, wait: ok.locked }, 429);
-    if (!ok) return json(res, { error: 'Sai mã PIN quản lý. Mã PIN in ở cửa sổ máy chủ' }, 401);
+  // Chặn trang khác gửi yêu cầu thay người dùng (cookie đi kèm): chỉ nhận POST từ chính trang này
+  if (req.method === 'POST') {
+    let host = req.headers.host;
+    try { if (req.headers.origin) host = new URL(req.headers.origin).host; } catch { host = null; }
+    if (host !== req.headers.host) return json(res, { error: 'Yêu cầu không hợp lệ' }, 403);
   }
 
+  // ----- Tài khoản -----
+  if (req.method === 'GET' && p === '/api/auth/me') {
+    if (me) { touch(me, req); saveUsers(); }
+    return json(res, { user: me ? publicUser(me) : null, needSetup: !hasAdmin(), title: config.title });
+  }
+
+  if (req.method === 'POST' && p === '/api/auth/register') {
+    const b = await readBody(req);
+    const username = String(b.username || '').trim().toLowerCase();
+    const name = String(b.name || '').trim().replace(/\s+/g, ' ');
+    const password = String(b.password || '');
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) return json(res, { error: 'Tên đăng nhập 3–32 ký tự: chữ không dấu, số, dấu . _ -', field: 'username' }, 400);
+    if (name.length < 2 || name.length > 60) return json(res, { error: 'Họ tên cần 2–60 ký tự', field: 'name' }, 400);
+    if (password.length < 6 || password.length > 200) return json(res, { error: 'Mật khẩu cần ít nhất 6 ký tự', field: 'password' }, 400);
+    const ip = clientIp(req), now = Date.now();
+    const recent = (signups.get(ip) || []).filter(t => now - t < 3600e3);
+    if (recent.length >= 10) return json(res, { error: 'Máy này đã đăng ký nhiều tài khoản. Hãy thử lại sau' }, 429);
+    if (findUser(username)) return json(res, { error: 'Tên đăng nhập này đã có người dùng', field: 'username' }, 409);
+    const first = !hasAdmin();
+    if (first) {
+      // Tài khoản đầu tiên là quản trị: phải có mã thiết lập in ở cửa sổ máy chủ
+      const k = 'setup:' + ip;
+      if (locked(k)) return json(res, { error: `Nhập sai mã thiết lập nhiều lần. Thử lại sau ${locked(k)} giây` }, 429);
+      const a = Buffer.from(String(b.setupCode || '').trim()), c = Buffer.from(config.setupCode);
+      if (a.length !== c.length || !crypto.timingSafeEqual(a, c)) { failed(k); return json(res, { error: 'Sai mã thiết lập. Mã in ở cửa sổ máy chủ', field: 'setupCode' }, 403); }
+    }
+    signups.set(ip, [...recent, now]);
+    const salt = crypto.randomBytes(16).toString('hex');
+    const u = { id: ++db.seq, username, name, salt, hash: hashPassword(password, salt), role: first ? 'admin' : 'user',
+      status: first ? 'approved' : 'pending', createdAt: now, approvedBy: first ? 'Tự động (quản trị đầu tiên)' : null, approvedAt: first ? now : null };
+    touch(u, req);
+    db.users.push(u);
+    saveUsers();
+    startSession(res, u);
+    log(`Đăng ký: ${username} (${name}) từ ${ip}${first ? ' · quản trị' : ' · chờ cấp quyền'}`);
+    pushAdmin();
+    return json(res, { user: publicUser(u) });
+  }
+
+  if (req.method === 'POST' && p === '/api/auth/login') {
+    const b = await readBody(req);
+    const key = 'login:' + clientIp(req) + ':' + String(b.username || '').toLowerCase();
+    if (locked(key)) return json(res, { error: `Sai mật khẩu nhiều lần. Thử lại sau ${locked(key)} giây`, wait: locked(key) }, 429);
+    const u = findUser(b.username);
+    const ok = u && crypto.timingSafeEqual(Buffer.from(u.hash, 'hex'), Buffer.from(hashPassword(b.password || '', u.salt), 'hex'));
+    if (!ok) { failed(key); return json(res, { error: 'Sai tên đăng nhập hoặc mật khẩu' }, 401); }
+    fails.delete(key);
+    if (u.status === 'blocked') return json(res, { error: 'Tài khoản này đã bị chặn. Liên hệ quản trị viên' }, 403);
+    touch(u, req);
+    saveUsers();
+    startSession(res, u);
+    pushAdmin();
+    return json(res, { user: publicUser(u) });
+  }
+
+  if (req.method === 'POST' && p === '/api/auth/logout') {
+    const token = cookies(req).sid;
+    if (token) { sessions.delete(tokenKey(token)); saveSessions(); }
+    res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+    return json(res, { ok: true });
+  }
+
+  // ----- Thời gian thực -----
   if (req.method === 'GET' && p === '/api/events') {
-    const role = url.searchParams.get('role') === 'admin' ? 'admin' : 'xem';
-    if (role === 'admin' && pinOk(req, url.searchParams.get('pin')) !== true) return json(res, { error: 'Sai mã PIN quản lý' }, 401);
+    if (!me || me.status === 'blocked') return json(res, { error: 'Cần đăng nhập' }, 401);
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-    const c = { res, role, ip: clientIp(req), device: deviceName(req.headers['user-agent']), since: Date.now() };
+    const c = { res, uid: me.id, ip: clientIp(req), device: deviceName(req.headers['user-agent']), since: Date.now() };
     clients.add(c);
-    send(c, 'info', publicInfo());
-    broadcast('network', networkInfo(), 'admin');
-    req.on('close', () => { clients.delete(c); broadcast('network', networkInfo(), 'admin'); });
+    send(c, 'me', publicUser(me));
+    if (me.status === 'approved') send(c, 'info', info());
+    if (isAdmin(me)) send(c, 'admin', adminData());
+    pushAdmin();
+    req.on('close', () => { clients.delete(c); pushAdmin(); });
     return;
   }
 
-  if (req.method === 'GET' && p === '/api/info') return json(res, publicInfo());
+  // ----- Địa chỉ IP: chỉ tài khoản đã được cấp quyền -----
+  if (req.method === 'GET' && p === '/api/info') {
+    if (!me) return json(res, { error: 'Cần đăng nhập' }, 401);
+    if (me.status !== 'approved') return json(res, { error: 'Tài khoản chưa được cấp quyền xem địa chỉ IP' }, 403);
+    return json(res, info());
+  }
 
-  if (req.method === 'GET' && p === '/api/admin/data') return json(res, { title: config.title, network: networkInfo() });
+  // ----- Quản trị -----
+  if (p.startsWith('/api/admin/')) {
+    if (!me) return json(res, { error: 'Cần đăng nhập' }, 401);
+    if (!isAdmin(me)) return json(res, { error: 'Chỉ quản trị viên được vào trang này' }, 403);
 
-  if (req.method === 'POST' && p === '/api/admin/check') { await checkChat(); return json(res, networkInfo()); }
+    if (req.method === 'GET' && p === '/api/admin/data') return json(res, adminData());
+    if (req.method === 'POST' && p === '/api/admin/check') { await checkChat(); return json(res, adminData()); }
+    if (req.method === 'POST' && p === '/api/admin/scan') return json(res, await scanLan());
 
-  if (req.method === 'POST' && p === '/api/admin/scan') return json(res, await scanLan());
+    if (req.method === 'POST' && p === '/api/admin/config') {
+      const b = await readBody(req);
+      const u = normUrl(b.url);
+      try { new URL(u); } catch { return json(res, { error: 'Địa chỉ không hợp lệ' }, 400); }
+      const title = String(b.title || '').trim().slice(0, 60);
+      config.lanchat.url = u;
+      if (title) config.title = title;
+      writeJson(CONFIG_FILE, config);
+      await checkChat();
+      return json(res, adminData());
+    }
 
-  if (req.method === 'POST' && p === '/api/admin/config') {
-    const b = await readBody(req);
-    const u = normUrl(b.url);
-    try { new URL(u); } catch { return json(res, { error: 'Địa chỉ không hợp lệ' }, 400); }
-    const title = String(b.title || '').trim().slice(0, 60);
-    config.lanchat.url = u;
-    if (title) config.title = title;
-    writeJson(CONFIG_FILE, config);
-    await checkChat();
-    return json(res, networkInfo());
+    const m = p.match(/^\/api\/admin\/users\/(\d+)$/);
+    if (req.method === 'POST' && m) {
+      const b = await readBody(req);
+      const u = db.users.find(x => x.id === +m[1]);
+      if (!u) return json(res, { error: 'Không tìm thấy tài khoản' }, 404);
+      if (u.id === me.id && b.action !== 'approve') return json(res, { error: 'Không tự thu hồi, chặn hay xóa tài khoản của chính mình' }, 400);
+      const admins = db.users.filter(isAdmin).length;
+      switch (b.action) {
+        case 'approve': u.status = 'approved'; u.approvedBy = me.name; u.approvedAt = Date.now(); break;
+        case 'revoke': u.status = 'pending'; break;
+        case 'block': u.status = 'blocked'; endSessions(u.id); break;
+        case 'make-admin': u.role = 'admin'; u.status = 'approved'; u.approvedBy ||= me.name; u.approvedAt ||= Date.now(); break;
+        case 'remove-admin': if (admins <= 1 && isAdmin(u)) return json(res, { error: 'Cần giữ ít nhất một quản trị viên' }, 400); u.role = 'user'; break;
+        case 'delete': db.users = db.users.filter(x => x !== u); endSessions(u.id); break;
+        default: return json(res, { error: 'Thao tác không hợp lệ' }, 400);
+      }
+      saveUsers();
+      log(`${me.username}: ${b.action} → ${u.username}`);
+      pushMe(u.id);
+      if (b.action === 'block' || b.action === 'delete') for (const c of clients) if (c.uid === u.id) c.res.end();
+      pushAdmin();
+      return json(res, adminData());
+    }
   }
 
   if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(res, p);
@@ -254,9 +417,10 @@ server.on('error', e => {
 });
 server.listen(PORT, '0.0.0.0', () => {
   log(`${config.title} đang chạy:`);
-  log(`  Trên máy này:  http://localhost:${PORT}/   ·   quản lý: http://localhost:${PORT}/quan-ly`);
+  log(`  Trên máy này:  http://localhost:${PORT}/   ·   quản trị: http://localhost:${PORT}/quan-ly`);
   for (const a of lanAddresses()) log(`  ${a.virtual ? 'Card mạng ảo' : 'Mạng LAN'} (${a.iface}): http://${a.ip}:${PORT}/`);
-  log(`  Mã PIN trang quản lý: ${config.adminPin}  (đổi trong data/config.json)`);
+  if (!hasAdmin()) log(`  Chưa có quản trị viên. Đăng ký tài khoản đầu tiên với MÃ THIẾT LẬP: ${config.setupCode}`);
+  else log(`  ${db.users.length} tài khoản · ${db.users.filter(u => u.status === 'pending').length} đang chờ cấp quyền`);
   log(`  Máy chủ LAN Chat: ${config.lanchat.url}`);
   checkChat();
 });

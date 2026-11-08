@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quản lý mạng LAN</title>
+<title>Quản trị mạng LAN</title>
 <link rel="stylesheet" href="style.css">
 <style>
   .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
@@ -13,7 +13,7 @@
   .list { display: grid; gap: 8px; }
   .row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); flex-wrap: wrap; }
   .row .grow { flex: 1; min-width: 160px; }
-  .login { max-width: 360px; margin: 12vh auto; }
+  .center { max-width: 420px; margin: 12vh auto; text-align: center; }
   .diagram { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
   .node { padding: 10px 14px; border-radius: 12px; border: 2px solid var(--border); background: var(--panel-2); text-align: center; min-width: 130px; }
   .node.on { border-color: var(--ok); }
@@ -26,33 +26,57 @@
   .stat .l { color: var(--muted); font-size: 13px; }
   .bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
   .bar i { display: block; height: 100%; background: var(--primary); width: 0; transition: width .3s; }
+  .s-pending { background: var(--warn-bg); color: var(--warn); }
+  .s-approved { background: var(--ok-bg); color: var(--ok); }
+  .s-blocked { background: var(--bad-bg); color: var(--bad); }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  tr.pending td { background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filters button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 </style>
 </head>
 <body>
-<section id="loginView" class="login card hidden">
-  <form class="card-b" id="loginForm" style="display:grid;gap:12px">
-    <h2>🔐 Quản lý mạng LAN</h2>
-    <p class="muted small" style="margin:0">Nhập mã PIN in ở cửa sổ máy chủ (lưu trong data/config.json).</p>
-    <input class="in" id="pin" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Mã PIN (6 số)" required style="-webkit-text-security:disc;letter-spacing:.3em">
-    <label class="check small"><input type="checkbox" id="showPin"> Hiện mã PIN</label>
-    <div class="err" id="loginErr" role="alert"></div>
-    <button class="btn primary">Vào trang quản lý</button>
-  </form>
+<section id="denyView" class="center card hidden">
+  <div class="card-b">
+    <div style="font-size:44px">⛔</div>
+    <h2>Chỉ quản trị viên được vào</h2>
+    <p class="muted">Tài khoản <b id="denyUser"></b> không có quyền quản trị.</p>
+    <a class="btn primary" href="/">Về trang chủ</a>
+  </div>
 </section>
 
 <div id="app" class="hidden">
   <div class="statusbar">
-    <div class="brand">🖧 <span id="title">Quản lý mạng LAN</span></div>
+    <div class="brand">🖧 <span id="title">Quản trị mạng LAN</span></div>
     <span class="pill"><i class="dot wait" id="dHub"></i><span id="tHub">Đang kết nối…</span></span>
     <span class="pill"><i class="dot" id="dChat"></i><span id="tChat">LAN Chat: —</span></span>
-    <a class="btn sm" href="/" target="_blank" rel="noopener">Xem trang kết nối ↗</a>
+    <span class="small">👤 <b id="userName"></b></span>
+    <a class="btn sm" href="/">Trang chủ</a>
+    <button class="btn sm ghost" id="btnLogout">Đăng xuất</button>
   </div>
   <main class="wrap" style="display:grid;gap:16px">
     <div class="stats">
+      <div class="card stat"><div class="v num" id="sPending">0</div><div class="l">Tài khoản chờ cấp quyền</div></div>
+      <div class="card stat"><div class="v num" id="sApproved">0</div><div class="l">Đã được cấp quyền</div></div>
       <div class="card stat"><div class="v" id="sChat">—</div><div class="l">Máy chủ LAN Chat</div></div>
-      <div class="card stat"><div class="v num" id="sAddr">0</div><div class="l">Địa chỉ để kết nối</div></div>
-      <div class="card stat"><div class="v num" id="sDev">0</div><div class="l">Thiết bị đang xem trang</div></div>
-      <div class="card stat"><div class="v num" id="sUp">—</div><div class="l">Trang địa chỉ đã chạy</div></div>
+      <div class="card stat"><div class="v num" id="sDev">0</div><div class="l">Thiết bị đang mở trang</div></div>
+    </div>
+
+    <!-- Cấp quyền tài khoản -->
+    <div class="card">
+      <div class="card-h">
+        <h2 style="font-size:17px">Cấp quyền xem địa chỉ IP mạng LAN</h2>
+        <div class="filters" id="filters">
+          <button class="btn sm" data-f="pending" aria-pressed="true">Chờ cấp quyền</button>
+          <button class="btn sm" data-f="approved" aria-pressed="false">Đã cấp quyền</button>
+          <button class="btn sm" data-f="blocked" aria-pressed="false">Bị chặn</button>
+          <button class="btn sm" data-f="" aria-pressed="false">Tất cả</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tài khoản</th><th>Trạng thái</th><th>IP gần nhất</th><th>Thiết bị</th><th>Đăng ký</th><th>Thao tác</th></tr></thead>
+        <tbody id="userRows"></tbody>
+      </table></div>
     </div>
 
     <div class="card">
@@ -68,14 +92,13 @@
           <form id="cfgForm" style="display:grid;gap:10px">
             <label class="field">Địa chỉ máy chủ LAN Chat
               <input class="in" id="cUrl" placeholder="http://localhost:8000 hoặc 192.168.1.10:8443"></label>
-            <label class="field">Tiêu đề trang kết nối
+            <label class="field">Tiêu đề trang
               <input class="in" id="cTitle" maxlength="60"></label>
             <div class="err" id="cfgErr" role="alert"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary">Lưu</button><button class="btn" type="button" id="btnCheck">Kiểm tra lại</button></div>
           </form>
         </div>
       </div>
-
       <div class="card">
         <div class="card-h"><h2 style="font-size:17px">Tự tìm máy chủ trong mạng LAN</h2></div>
         <div class="card-b" style="display:grid;gap:10px">
@@ -88,7 +111,7 @@
     </div>
 
     <div class="card">
-      <div class="card-h"><h2 style="font-size:17px">Địa chỉ cung cấp cho máy khác</h2><span class="muted small">Đang hiện ở trang kết nối</span></div>
+      <div class="card-h"><h2 style="font-size:17px">Địa chỉ cấp cho tài khoản đã được cấp quyền</h2></div>
       <div class="card-b list" id="connect"></div>
     </div>
 
@@ -100,7 +123,7 @@
       <div class="card">
         <div class="card-h"><h2 style="font-size:17px">Thiết bị đang mở trang</h2><span class="muted small" id="devCount"></span></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Trang</th><th>Địa chỉ IP</th><th>Thiết bị</th><th>Từ lúc</th></tr></thead>
+          <thead><tr><th>Tài khoản</th><th>Địa chỉ IP</th><th>Thiết bị</th><th>Từ lúc</th></tr></thead>
           <tbody id="devRows"></tbody>
         </table></div>
       </div>
@@ -113,9 +136,8 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hms = t => new Date(t).toLocaleTimeString('vi-VN');
-const ROLE = { xem: '🌐 Trang kết nối', admin: '🖧 Quản lý' };
-let PIN = '', N = {}, es = null, lockTimer = null;
-try { PIN = sessionStorage.getItem('pin') || ''; } catch { }
+const dt = t => t ? new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—';
+let me = null, N = {}, USERS = [], filter = 'pending', es = null, knownPending = null;
 
 function toast(title, text = '') {
   const el = document.createElement('div');
@@ -125,81 +147,110 @@ function toast(title, text = '') {
 }
 
 async function api(path, body) {
-  const r = await fetch('/api/admin/' + path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-Pin': PIN }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch('/api/' + path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const d = await r.json().catch(() => ({}));
-  if (r.status === 401 || r.status === 429) { logout(); if (d.wait) lockCountdown(d.wait); throw new Error(d.error); }
+  if (r.status === 401) { location.replace('/?next=/quan-ly'); throw new Error(d.error); }
   if (!r.ok) throw new Error(d.error || 'Máy chủ không phản hồi');
   return d;
 }
 
-function logout() { try { sessionStorage.removeItem('pin'); } catch { } es?.close(); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
-
-function lockCountdown(sec) {
-  clearInterval(lockTimer);
-  const btn = $('#loginForm button');
-  const tick = () => {
-    if (sec <= 0) { clearInterval(lockTimer); btn.disabled = false; $('#loginErr').textContent = 'Đã mở khóa, hãy nhập lại mã PIN.'; return; }
-    btn.disabled = true; $('#loginErr').textContent = `Nhập sai mã PIN nhiều lần. Thử lại sau ${sec--} giây`;
-  };
-  tick(); lockTimer = setInterval(tick, 1000);
+function apply(d) {
+  N = d.network; USERS = d.users;
+  const pending = USERS.filter(u => u.status === 'pending');
+  if (knownPending) for (const u of pending) if (!knownPending.has(u.id)) toast('🔔 Có tài khoản mới chờ cấp quyền', `${u.name} (${u.username}) · ${u.lastIp}`);
+  knownPending = new Set(pending.map(u => u.id));
+  render();
 }
 
-$('#showPin').onchange = e => { $('#pin').style.webkitTextSecurity = e.target.checked ? 'none' : 'disc'; };
-$('#loginForm').onsubmit = async e => {
-  e.preventDefault();
-  PIN = $('#pin').value.replace(/\s/g, '');
-  $('#loginErr').textContent = '';
-  try { await start(); } catch (err) { if (!$('#loginForm button').disabled) $('#loginErr').textContent = err.message; $('#pin').select(); }
+function render() { renderUsers(); renderNetwork(); }
+
+const ACT = {
+  approve: ['Cấp quyền', 'ok'], revoke: ['Thu hồi', ''], block: ['Chặn', ''], 'make-admin': ['Làm quản trị', ''],
+  'remove-admin': ['Bỏ quản trị', ''], delete: ['Xóa', 'ghost'],
 };
-
-async function start() {
-  const d = await api('data');
-  try { sessionStorage.setItem('pin', PIN); } catch { }
-  $('#loginView').classList.add('hidden');
-  $('#app').classList.remove('hidden');
-  $('#title').textContent = d.title + ' · Quản lý';
-  $('#cTitle').value = d.title;
-  N = d.network; $('#cUrl').value = N.lanchat.url;
-  render(); connect();
+function actionsFor(u) {
+  if (u.id === me.id) return '<span class="muted small">Tài khoản của bạn</span>';
+  const a = [];
+  if (u.status !== 'approved') a.push('approve');
+  if (u.status === 'approved') a.push('revoke');
+  if (u.status !== 'blocked') a.push('block');
+  a.push(u.role === 'admin' ? 'remove-admin' : 'make-admin', 'delete');
+  return `<div class="acts">${a.map(k => `<button class="btn sm ${ACT[k][1]}" data-uid="${u.id}" data-act="${k}">${ACT[k][0]}</button>`).join('')}</div>`;
 }
 
-function render() {
+function renderUsers() {
+  const count = s => USERS.filter(u => u.status === s).length;
+  $('#sPending').textContent = count('pending');
+  $('#sApproved').textContent = count('approved');
+  document.title = (count('pending') ? `(${count('pending')}) ` : '') + 'Quản trị mạng LAN';
+  document.querySelectorAll('[data-f]').forEach(b => {
+    b.setAttribute('aria-pressed', b.dataset.f === filter);
+    const n = b.dataset.f ? count(b.dataset.f) : USERS.length;
+    b.textContent = b.textContent.replace(/ \(\d+\)$/, '') + ` (${n})`;
+  });
+  const list = USERS.filter(u => !filter || u.status === filter).sort((a, b) => b.createdAt - a.createdAt);
+  $('#userRows').innerHTML = list.map(u => `<tr class="${u.status === 'pending' ? 'pending' : ''}">
+    <td><b>${esc(u.name)}</b>${u.role === 'admin' ? ' <span class="badge st-moi">Quản trị</span>' : ''}<br><span class="small muted mono">${esc(u.username)}</span></td>
+    <td><span class="badge s-${u.status}">${esc(u.statusLabel)}</span>${u.approvedBy && u.status === 'approved' ? `<br><span class="small muted">bởi ${esc(u.approvedBy)}</span>` : ''}</td>
+    <td class="mono small">${esc(u.lastIp || '—')}<br><span class="muted">${dt(u.lastSeen)}</span></td>
+    <td class="small">${esc(u.device || '—')}</td><td class="small num">${dt(u.createdAt)}</td><td>${actionsFor(u)}</td></tr>`).join('')
+    || `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">${filter === 'pending' ? 'Không có tài khoản nào chờ cấp quyền.' : 'Không có tài khoản.'}</td></tr>`;
+}
+
+function renderNetwork() {
   const c = N.lanchat || {}, devices = N.devices || [], connectList = N.connect || [];
-  const viewers = devices.filter(d => d.role === 'xem').length;
   $('#dChat').className = 'dot ' + (c.ok ? 'on' : 'off');
   $('#tChat').textContent = 'LAN Chat: ' + (c.ok ? 'đang chạy' : 'chưa kết nối được');
   $('#sChat').innerHTML = c.ok ? '<span style="color:var(--ok)">Đang chạy</span>' : '<span style="color:var(--bad)">Tắt</span>';
-  $('#sAddr').textContent = connectList.length;
-  $('#sDev').textContent = viewers;
-  const up = N.uptime || 0;
-  $('#sUp').textContent = up < 3600 ? Math.floor(up / 60) + ' phút' : Math.floor(up / 3600) + ' giờ ' + Math.floor(up % 3600 / 60) + ' phút';
+  $('#sDev').textContent = devices.length;
   $('#updated').textContent = 'Cập nhật ' + hms(Date.now());
+  const approved = USERS.filter(u => u.status === 'approved').length;
   $('#diagram').innerHTML = `
-    <div class="node ${viewers ? 'on' : ''}">📱 Máy trong LAN<small>${viewers} đang xem địa chỉ</small></div><span class="arrow">→</span>
-    <div class="node on">🌐 Trang địa chỉ<small>${esc(N.hostname)}:${N.port}</small></div><span class="arrow">→</span>
+    <div class="node on">👥 Tài khoản<small>${approved} được cấp quyền</small></div><span class="arrow">→</span>
+    <div class="node on">🌐 Trang cấp địa chỉ<small>${esc(N.hostname)}:${N.port}</small></div><span class="arrow">→</span>
     <div class="node ${c.ok ? 'on' : 'off'}">🔒 Máy chủ LAN Chat<small>${c.ok ? esc(connectList[0]?.host || '') : 'chưa chạy'}</small></div>`;
-  $('#chatBadge').innerHTML = `<span class="badge ${c.ok ? 'st-da_giao' : 'st-huy'}">${c.ok ? 'Đang chạy' : 'Không kết nối được'}</span>`;
+  $('#chatBadge').innerHTML = `<span class="badge ${c.ok ? 's-approved' : 's-blocked'}">${c.ok ? 'Đang chạy' : 'Không kết nối được'}</span>`;
   $('#chatInfo').innerHTML = `<dt>Đang dùng</dt><dd>${esc(c.url)}</dd>` + (c.ok
     ? `<dt>IP chính</dt><dd>${esc(c.ip)}</dd><dt>Cổng HTTPS</dt><dd>${esc(c.port)}</dd><dt>Internet</dt><dd>${esc(c.public || 'chưa bật')}</dd><dt>Mã máy chủ</dt><dd class="mono">${esc(c.id)}</dd>`
     : `<dt>Lỗi</dt><dd style="color:var(--bad)">${esc(c.error)}</dd>`) + (c.at ? `<dt>Kiểm tra lúc</dt><dd>${hms(c.at)}</dd>` : '');
   $('#connect').innerHTML = connectList.map(a => `<div class="row"><div class="grow"><b class="mono">${esc(a.host)}</b><br><span class="small muted">${a.kind === 'lan' ? 'Mạng LAN' : 'Internet'} · ${esc(a.url)}</span></div>
     <a class="btn sm" href="${esc(a.url)}" target="_blank" rel="noopener">Mở</a></div>`).join('')
     || '<p class="muted small" style="margin:0">Chưa có địa chỉ: máy chủ LAN Chat chưa chạy hoặc sai địa chỉ ở trên.</p>';
-  $('#ifaces').innerHTML = (N.addresses || []).map(a => `<div class="row"><div class="grow"><b>${esc(a.iface)}</b>${a.virtual ? ' <span class="badge st-xac_nhan">ảo</span>' : ''}<br>
+  $('#ifaces').innerHTML = (N.addresses || []).map(a => `<div class="row"><div class="grow"><b>${esc(a.iface)}</b>${a.virtual ? ' <span class="badge s-pending">ảo</span>' : ''}<br>
     <span class="small muted mono">${esc(a.ip)} · mặt nạ ${esc(a.netmask)} · MAC ${esc(a.mac)}</span></div>
-    <a class="btn sm" href="http://${esc(a.ip)}:${N.port}/" target="_blank" rel="noopener">Trang địa chỉ</a></div>`).join('')
+    <a class="btn sm" href="http://${esc(a.ip)}:${N.port}/" target="_blank" rel="noopener">Mở trang</a></div>`).join('')
     || '<p class="muted small" style="margin:0">Máy chưa vào Wi‑Fi / mạng LAN.</p>';
   $('#devCount').textContent = devices.length + ' thiết bị';
-  $('#devRows').innerHTML = [...devices].sort((a, b) => a.since - b.since).map(d => `<tr><td>${ROLE[d.role]}</td><td class="mono">${esc(d.ip)}</td><td>${esc(d.device)}</td><td class="num">${hms(d.since)}</td></tr>`).join('')
+  $('#devRows').innerHTML = [...devices].sort((a, b) => a.since - b.since).map(d => `<tr><td><b>${esc(d.user)}</b><br><span class="small muted mono">${esc(d.username || '')}</span></td>
+    <td class="mono">${esc(d.ip)}</td><td>${esc(d.device)}</td><td class="num">${hms(d.since)}</td></tr>`).join('')
     || '<tr><td colspan="4" class="muted">Không có thiết bị nào.</td></tr>';
 }
 
+// ---------- Thao tác ----------
+document.addEventListener('click', async e => {
+  const f = e.target.closest('[data-f]');
+  if (f) { filter = f.dataset.f; return renderUsers(); }
+  const t = e.target.closest('[data-act]');
+  if (t) {
+    const u = USERS.find(x => x.id === +t.dataset.uid);
+    if (t.dataset.act === 'delete' && !confirm(`Xóa tài khoản ${u.username}? Không hoàn tác được.`)) return;
+    if (t.dataset.act === 'make-admin' && !confirm(`Cho ${u.name} quyền quản trị (cấp quyền, chặn, xóa người khác)?`)) return;
+    t.disabled = true;
+    try { apply(await api('admin/users/' + u.id, { action: t.dataset.act })); toast(`${ACT[t.dataset.act][0]}: ${u.name}`); }
+    catch (err) { toast('Không thực hiện được', err.message); t.disabled = false; }
+    return;
+  }
+  const use = e.target.closest('[data-use]');
+  if (use) { $('#cUrl').value = use.dataset.use; $('#cfgForm').requestSubmit(); }
+});
+
 $('#cfgForm').onsubmit = async e => {
   e.preventDefault(); $('#cfgErr').textContent = '';
-  try { N = await api('config', { url: $('#cUrl').value, title: $('#cTitle').value }); $('#cUrl').value = N.lanchat.url; render(); toast(N.lanchat.ok ? 'Đã lưu, máy chủ LAN Chat đang chạy' : 'Đã lưu nhưng chưa kết nối được', N.lanchat.error || ''); }
+  try { apply(await api('admin/config', { url: $('#cUrl').value, title: $('#cTitle').value })); $('#cUrl').value = N.lanchat.url;
+    toast(N.lanchat.ok ? 'Đã lưu, máy chủ LAN Chat đang chạy' : 'Đã lưu nhưng chưa kết nối được', N.lanchat.error || ''); }
   catch (err) { $('#cfgErr').textContent = err.message; }
 };
-$('#btnCheck').onclick = async () => { try { N = await api('check', {}); render(); toast(N.lanchat.ok ? 'Máy chủ LAN Chat đang chạy' : 'Chưa kết nối được', N.lanchat.error || ''); } catch (err) { toast('Lỗi', err.message); } };
+$('#btnCheck').onclick = async () => { try { apply(await api('admin/check', {})); toast(N.lanchat.ok ? 'Máy chủ LAN Chat đang chạy' : 'Chưa kết nối được', N.lanchat.error || ''); } catch (err) { toast('Lỗi', err.message); } };
 
 $('#btnScan').onclick = async () => {
   const btn = $('#btnScan');
@@ -207,7 +258,7 @@ $('#btnScan').onclick = async () => {
   $('#scanBar').classList.remove('hidden'); $('#scanBar i').style.width = '2%';
   $('#scanResult').innerHTML = '';
   try {
-    const d = await api('scan', {});
+    const d = await api('admin/scan', {});
     $('#scanResult').innerHTML = d.found.map(f => `<div class="row"><div class="grow"><b class="mono">${esc(f.url.replace('https://', ''))}</b><br>
       <span class="small muted">Mã máy chủ ${esc(f.id)} · ${(f.lan || []).length} địa chỉ</span></div>
       <button class="btn sm primary" data-use="${esc(f.url)}">Dùng máy chủ này</button></div>`).join('')
@@ -215,24 +266,36 @@ $('#btnScan').onclick = async () => {
   } catch (err) { toast('Không quét được', err.message); }
   finally { btn.disabled = false; btn.textContent = '🔍 Quét lại'; $('#scanBar').classList.add('hidden'); }
 };
-document.addEventListener('click', e => {
-  const t = e.target.closest('[data-use]');
-  if (t) { $('#cUrl').value = t.dataset.use; $('#cfgForm').requestSubmit(); }
-});
+
+$('#btnLogout').onclick = async () => { await api('auth/logout', {}).catch(() => {}); location.replace('/'); };
 
 function connect() {
   es?.close();
-  es = new EventSource('/api/events?role=admin&pin=' + encodeURIComponent(PIN));
+  es = new EventSource('/api/events');
   es.onopen = () => { $('#dHub').className = 'dot on'; $('#tHub').textContent = 'Đã kết nối'; };
   es.onerror = () => {
     $('#dHub').className = 'dot off'; $('#tHub').textContent = 'Mất kết nối · đang thử lại…';
-    if (es.readyState === EventSource.CLOSED) setTimeout(() => api('data').then(connect, () => {}), 3000);
+    if (es.readyState === EventSource.CLOSED) setTimeout(() => api('admin/data').then(d => { apply(d); connect(); }, () => {}), 3000);
   };
-  es.addEventListener('network', e => { N = JSON.parse(e.data); render(); });
+  es.addEventListener('admin', e => apply(JSON.parse(e.data)));
+  es.addEventListener('me', e => { const u = JSON.parse(e.data); if (!u || u.role !== 'admin' || u.status !== 'approved') location.replace('/'); });
   es.addEventListener('scan', e => { const s = JSON.parse(e.data); $('#scanBar i').style.width = Math.round(s.done / s.total * 100) + '%'; });
 }
 
-if (PIN) start().catch(() => logout()); else logout();
+(async () => {
+  const d = await fetch('/api/auth/me').then(r => r.json()).catch(() => ({}));
+  me = d.user;
+  if (!me) return location.replace('/?next=/quan-ly');
+  if (me.role !== 'admin' || me.status !== 'approved') { $('#denyUser').textContent = me.username; return $('#denyView').classList.remove('hidden'); }
+  $('#userName').textContent = me.name;
+  $('#app').classList.remove('hidden');
+  const a = await api('admin/data');
+  $('#title').textContent = a.title + ' · Quản trị';
+  $('#cTitle').value = a.title;
+  apply(a);
+  $('#cUrl').value = N.lanchat.url;
+  connect();
+})();
 </script>
 </body>
 </html>

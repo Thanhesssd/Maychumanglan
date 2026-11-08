@@ -7,10 +7,20 @@ Chạy: bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần No
 
 | Trang | Địa chỉ | Dùng để |
 |---|---|---|
-| Trang kết nối | `http://localhost:3000/`, máy khác: `http://<IP máy này>:3000/` | Xem IP máy chủ LAN Chat, quét mã QR, sao chép link, cài chứng chỉ |
-| Trang quản lý | `http://localhost:3000/quan-ly` | Đặt địa chỉ máy chủ LAN Chat, tự tìm máy chủ trong LAN, xem card mạng và thiết bị đang mở trang |
+| Trang chủ | `http://localhost:3000/`, máy khác: `http://<IP máy này>:3000/` | Đăng ký, đăng nhập. Tài khoản đã được cấp quyền thấy IP máy chủ LAN Chat, mã QR, link cài chứng chỉ |
+| Trang quản trị | `http://localhost:3000/quan-ly` | Cấp quyền / thu hồi / chặn tài khoản, đặt địa chỉ máy chủ LAN Chat, tự tìm máy chủ trong LAN, xem card mạng và thiết bị |
 
-Mã PIN trang quản lý in ở cửa sổ máy chủ và lưu trong `data/config.json` (mục `adminPin`).
+## Tài khoản và cấp quyền
+
+1. **Tài khoản đầu tiên là quản trị viên.** Khi đăng ký phải nhập **mã thiết lập** in ở cửa sổ máy chủ
+   (lưu trong `data/config.json`, mục `setupCode`). Nhờ vậy người lạ trong mạng không chiếm được quyền quản trị.
+2. Người khác đăng ký sẽ ở trạng thái **Chờ cấp quyền**, chưa thấy địa chỉ IP.
+3. Quản trị viên vào trang quản trị bấm **Cấp quyền**. Trang của người đó tự hiện địa chỉ IP ngay, không cần tải lại.
+4. **Thu hồi** đưa tài khoản về chờ cấp quyền; **Chặn** đăng xuất người đó ngay và không cho đăng nhập lại.
+
+Mật khẩu được băm bằng scrypt, không lưu dạng đọc được. Quên mật khẩu quản trị: tắt máy chủ, xóa `data/users.json`,
+bật lại rồi đăng ký lại với mã thiết lập.
+
 Máy khác cùng Wi‑Fi không vào được thì chạy `mo-cong-mang.bat` một lần để mở cổng 3000.
 
 ## Cách hoạt động
