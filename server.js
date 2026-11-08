@@ -234,10 +234,32 @@ function connectAddresses() {
   return list.sort((a, b) => rank(a) - rank(b));
 }
 
+// App LAN Chat bản GitHub Pages nhận địa chỉ máy chủ qua link: #server=<link Internet>&lan=<IP:8443,…>
+// rồi tự lưu và tự kết nối. Link được tạo lại theo địa chỉ hiện tại nên luôn trỏ đúng máy chủ đang chạy.
+const CHAT_WEB = 'https://thanhesssd.github.io/hethongungdungchatbaomat-kysopdf/ui/ui/ui/'
+  + encodeURIComponent('Ứng dụng Chat LAN Bảo mật & Ký số PDF.html');
+function chatLinks() {
+  const web = config.chatWebUrl || CHAT_WEB;
+  const virt = new Set(lanAddresses().filter(a => a.virtual).map(a => a.ip));
+  const states = [{ name: 'Máy chủ 1', st: chat }, ...serversView().map(s => ({ name: s.name, st: s }))];
+  const seen = new Set(), out = [];
+  for (const { name, st } of states) {
+    if (!st.ok || (st.id && seen.has(st.id))) continue;
+    if (st.id) seen.add(st.id);
+    // Card mạng ảo (VMware…) không giúp máy khác kết nối, bỏ ra cho link gọn
+    const lan = (st.lan || []).filter(hp => !virt.has(hp.split(':')[0]) && !hp.startsWith('127.'));
+    const params = [st.public ? 'server=' + encodeURIComponent(st.public.replace(/^https?:\/\//, '').replace(/\/+$/, '')) : '',
+      lan.length ? 'lan=' + encodeURIComponent(lan.join(',')) : ''].filter(Boolean).join('&');
+    if (params) out.push({ server: name, url: `${web}#${params}`, internet: !!st.public });
+  }
+  return out;
+}
+
 function info() {
   const extras = serversView();
   const ok = chat.ok || extras.some(s => s.ok);
   return { title: config.title, ok, error: ok ? null : chat.error, checkedAt: chat.at, id: chat.id || null, addresses: connectAddresses(),
+    chatLinks: chatLinks(),
     servers: [{ name: 'Máy chủ 1', ok: chat.ok }, ...extras.map(s => ({ name: s.name, ok: s.ok }))] };
 }
 
@@ -264,7 +286,7 @@ function networkInfo() {
   return {
     hostname: os.hostname(), port: PORT, uptime: Math.round(process.uptime()), addresses: lanAddresses(), publicUrl: publicUrl(),
     devices: [...clients].map(c => ({ user: userOf(c)?.name || '—', username: userOf(c)?.username, ip: c.ip, device: c.device, since: c.since })),
-    lanchat: { url: config.lanchat.url, ...chat }, servers: serversView(), connect: connectAddresses(),
+    lanchat: { url: config.lanchat.url, ...chat }, servers: serversView(), connect: connectAddresses(), chatLinks: chatLinks(),
   };
 }
 // Link mời dùng IP Wi‑Fi/LAN thật của máy này, để máy khác trong mạng mở được

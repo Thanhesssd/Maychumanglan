@@ -110,6 +110,15 @@ if (location.protocol === 'file:') document.write(
 <!-- Địa chỉ IP: chỉ người đã được cấp quyền -->
 <main class="wrap hidden" id="infoView" style="display:grid;gap:16px;max-width:900px">
   <section class="card"><div class="card-b" id="main"><p class="muted">Đang lấy địa chỉ máy chủ…</p></div></section>
+  <!-- Mở app LAN Chat bản GitHub đã kết nối sẵn tới máy chủ đang chạy (link tự cập nhật khi địa chỉ máy chủ đổi) -->
+  <section class="card hidden" id="chatWebCard" style="border:2px solid var(--ok)">
+    <div class="card-h"><h2 style="font-size:17px">💬 LAN Chat trên GitHub, kết nối sẵn</h2><span class="muted small">Tự cập nhật theo máy chủ</span></div>
+    <div class="card-b" style="display:grid;gap:10px">
+      <p class="small muted" style="margin:0">Bấm để mở app LAN Chat (bản GitHub Pages). App tự nhận địa chỉ máy chủ đang chạy và kết nối luôn,
+        không phải gõ IP. Dùng được qua Wi‑Fi lẫn 4G/5G. Máy chủ đổi địa chỉ thì nút này tự đổi theo: bấm lại là kết nối được.</p>
+      <div class="list" id="chatWebList"></div>
+    </div>
+  </section>
   <section class="card hidden" id="otherCard">
     <div class="card-h"><h2 style="font-size:17px">Địa chỉ khác của máy chủ</h2><span class="muted small">Dùng khi địa chỉ chính không vào được</span></div>
     <div class="card-b list" id="others"></div>
@@ -323,6 +332,12 @@ function render(d) {
   $('#dChat').className = 'dot ' + (d.ok ? 'on' : 'off');
   const sv = d.servers || [], up = sv.filter(s => s.ok).length;
   $('#tChat').textContent = (sv.length > 1 ? `Máy chủ LAN Chat: ${up}/${sv.length} đang chạy` : d.ok ? 'Máy chủ LAN Chat: đang chạy' : 'Máy chủ LAN Chat: chưa kết nối được') + (d.checkedAt ? ' · ' + hms(d.checkedAt) : '');
+  const cl = d.chatLinks || [];
+  $('#chatWebCard').classList.toggle('hidden', !cl.length);
+  $('#chatWebList').innerHTML = cl.map((c, i) => `<div class="row"><div class="grow"><b>${esc(c.server)}</b>
+    <span class="small muted">· ${c.internet ? 'qua Internet + mạng LAN' : 'chỉ trong mạng LAN (cần cài chứng chỉ)'}</span></div>
+    <a class="btn ${i ? '' : 'primary'}" href="${esc(c.url)}" target="_blank" rel="noopener">💬 Mở LAN Chat (bản GitHub)</a>
+    <button class="btn sm" data-copy="${esc(c.url)}">🔗 Sao chép link</button></div>`).join('');
   const [main, ...rest] = d.addresses;
   if (!main) {
     $('#main').innerHTML = `<div class="empty"><div class="big">🔌</div><h2>Chưa tìm thấy máy chủ LAN Chat</h2>
