@@ -3,7 +3,18 @@
 Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR** để các máy khác kết nối tới máy chủ
 [LAN Chat bảo mật & ký số PDF](https://github.com/Thanhesssd/hethongungdungchatbaomat-kysopdf).
 
-Chạy: bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần Node.js 18 trở lên, không phải cài thư viện.
+## 🔗 Link truy cập app
+
+**https://introduction-bibliography-light-coaches.trycloudflare.com**
+
+Mở được trên Chrome ở mọi nơi (Wi‑Fi, 4G). Link chỉ hoạt động khi máy chủ đang bật, và **đổi mỗi lần bật lại đường hầm**:
+khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu code; app chạy trên máy chủ của chủ sở hữu.
+
+## Chạy máy chủ
+
+1. Bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần Node.js 18 trở lên, không phải cài thư viện.
+2. Muốn người ngoài mạng LAN mở được: cài một lần `winget install --id Cloudflare.cloudflared`, rồi bấm đúp
+   `chia-se-internet.bat`. Cửa sổ in ra link `https://….trycloudflare.com`; giữ cửa sổ mở thì link còn chạy.
 
 | Trang | Địa chỉ | Dùng để |
 |---|---|---|
@@ -12,14 +23,18 @@ Chạy: bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần No
 
 ## Tài khoản và cấp quyền
 
-1. **Tài khoản đầu tiên là quản trị viên.** Khi đăng ký phải nhập **mã thiết lập** in ở cửa sổ máy chủ
-   (lưu trong `data/config.json`, mục `setupCode`). Nhờ vậy người lạ trong mạng không chiếm được quyền quản trị.
+1. **Tài khoản đầu tiên là quản trị viên** và chỉ tạo được **trên chính máy chủ** (mở `http://localhost:3000/`).
+   Máy khác trong mạng hoặc khách qua link Internet đăng ký lúc chưa có quản trị viên sẽ bị từ chối,
+   nên người lạ không chiếm được quyền quản trị.
 2. Người khác đăng ký sẽ ở trạng thái **Chờ cấp quyền**, chưa thấy địa chỉ IP.
 3. Quản trị viên vào trang quản trị bấm **Cấp quyền**. Trang của người đó tự hiện địa chỉ IP ngay, không cần tải lại.
 4. **Thu hồi** đưa tài khoản về chờ cấp quyền; **Chặn** đăng xuất người đó ngay và không cho đăng nhập lại.
+5. **Mời người dùng:** ở trang quản trị nhập tên người cần mời và bấm **Tạo link mời**, rồi sao chép link gửi đi.
+   Người đó đăng ký qua link là được cấp quyền ngay. Link dùng một lần, hết hạn sau 7 ngày; khi đường hầm Internet
+   đang bật, link mời dùng link Internet.
 
 Mật khẩu được băm bằng scrypt, không lưu dạng đọc được. Quên mật khẩu quản trị: tắt máy chủ, xóa `data/users.json`,
-bật lại rồi đăng ký lại với mã thiết lập.
+bật lại rồi đăng ký lại trên máy chủ.
 
 Máy khác cùng Wi‑Fi không vào được thì chạy `mo-cong-mang.bat` một lần để mở cổng 3000.
 

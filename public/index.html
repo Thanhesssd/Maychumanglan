@@ -51,13 +51,13 @@
       <button type="button" role="tab" data-mode="login" aria-selected="true">Đăng nhập</button>
       <button type="button" role="tab" data-mode="register" aria-selected="false">Đăng ký</button>
     </div>
-    <div class="note warn hidden" id="setupNote">Chưa có quản trị viên. Tài khoản đăng ký đầu tiên sẽ là <b>quản trị viên</b> và cần <b>mã thiết lập</b> in ở cửa sổ máy chủ.</div>
+    <div class="note warn hidden" id="setupNote"></div>
+    <div class="note hidden" id="inviteNote" style="background:var(--ok-bg);color:var(--ok)"></div>
     <form id="authForm" style="display:grid;gap:10px" novalidate>
       <label class="field reg hidden">Họ và tên<input class="in" id="fName" autocomplete="name" maxlength="60"></label>
       <label class="field">Tên đăng nhập<input class="in" id="fUser" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32" placeholder="vd: thanh.nguyen"></label>
       <label class="field">Mật khẩu<input class="in" id="fPass" type="password" autocomplete="current-password" maxlength="200"></label>
       <label class="field reg hidden">Nhập lại mật khẩu<input class="in" id="fPass2" type="password" autocomplete="new-password" maxlength="200"></label>
-      <label class="field setup hidden">Mã thiết lập (6 số, in ở cửa sổ máy chủ)<input class="in" id="fSetup" inputmode="numeric" autocomplete="off" maxlength="12"></label>
       <div class="err" id="authErr" role="alert"></div>
       <button class="btn primary" id="btnAuth">Đăng nhập</button>
     </form>
@@ -101,7 +101,8 @@ const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hms = t => new Date(t).toLocaleTimeString('vi-VN');
-let mode = 'login', needSetup = false, me = null, es = null;
+let mode = 'login', needSetup = false, onServer = false, me = null, es = null;
+let invite = new URLSearchParams(location.search).get('moi'), inviteInfo = null; // link mời của quản trị viên
 
 function toast(title, text = '') {
   const el = document.createElement('div');
@@ -121,10 +122,13 @@ function setMode(m) {
   mode = m;
   $$('[data-mode]').forEach(b => b.setAttribute('aria-selected', b.dataset.mode === m));
   $$('.reg').forEach(el => el.classList.toggle('hidden', m !== 'register'));
-  $$('.setup').forEach(el => el.classList.toggle('hidden', !(m === 'register' && needSetup)));
-  $('#setupNote').classList.toggle('hidden', !(m === 'register' && needSetup));
+  $('#setupNote').innerHTML = onServer
+    ? 'Chưa có quản trị viên. Tài khoản đăng ký đầu tiên trên máy chủ này sẽ là <b>quản trị viên</b>.'
+    : 'Chưa có quản trị viên. Người quản lý cần tạo tài khoản quản trị trên <b>chính máy chủ</b> (mở <b>http://localhost:' + (location.port || 80) + '</b>) trước.';
+  $('#setupNote').classList.toggle('hidden', !needSetup);
+  $('#inviteNote').classList.toggle('hidden', !(inviteInfo && m === 'register'));
   $('#fPass').autocomplete = m === 'register' ? 'new-password' : 'current-password';
-  $('#btnAuth').textContent = m === 'register' ? (needSetup ? 'Tạo tài khoản quản trị' : 'Đăng ký') : 'Đăng nhập';
+  $('#btnAuth').textContent = m === 'register' ? (needSetup && onServer ? 'Tạo tài khoản quản trị' : 'Đăng ký') : 'Đăng nhập';
   $('#authErr').textContent = '';
 }
 $$('[data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
@@ -135,18 +139,20 @@ $('#authForm').onsubmit = async e => {
   const body = { username: $('#fUser').value, password: $('#fPass').value };
   if (mode === 'register') {
     if ($('#fPass').value !== $('#fPass2').value) { $('#authErr').textContent = 'Hai mật khẩu không khớp'; return $('#fPass2').focus(); }
-    Object.assign(body, { name: $('#fName').value, setupCode: $('#fSetup').value });
+    body.name = $('#fName').value;
+    if (inviteInfo) body.invite = invite;
   }
   $('#btnAuth').disabled = true;
   try {
     const d = await api('auth/' + mode, body);
     me = d.user;
+    if (inviteInfo) { inviteInfo = null; history.replaceState(null, '', location.pathname); }
     $('#authForm').reset();
     toast(mode === 'register' ? 'Đã tạo tài khoản' : 'Đăng nhập thành công', me.status === 'approved' ? '' : 'Đang chờ quản trị viên cấp quyền');
     enter();
   } catch (err) {
     $('#authErr').textContent = err.message;
-    const f = { username: '#fUser', name: '#fName', password: '#fPass', setupCode: '#fSetup' }[err.field];
+    const f = { username: '#fUser', name: '#fName', password: '#fPass' }[err.field];
     if (f) $(f).focus();
   } finally { $('#btnAuth').disabled = false; }
 };
@@ -156,7 +162,7 @@ $('#btnLogout').onclick = async () => {
   es?.close(); me = null;
   show('auth');
   const d = await api('auth/me').catch(() => ({}));
-  needSetup = !!d.needSetup; setMode('login');
+  needSetup = !!d.needSetup; onServer = !!d.onServer; setMode('login');
 };
 
 function show(view) {
@@ -244,9 +250,16 @@ document.addEventListener('click', e => { const t = e.target.closest('[data-copy
 (async () => {
   try {
     const d = await api('auth/me');
-    needSetup = d.needSetup; me = d.user;
+    needSetup = d.needSetup; onServer = !!d.onServer; me = d.user;
     $('#title').textContent = d.title;
-    setMode(needSetup ? 'register' : 'login');
+    if (invite && !me) {
+      inviteInfo = await api('invite?t=' + encodeURIComponent(invite)).catch(err => { $('#authErr').textContent = err.message; return null; });
+      if (inviteInfo) {
+        $('#inviteNote').innerHTML = `🎟️ <b>${esc(inviteInfo.createdBy)}</b> đã mời <b>${esc(inviteInfo.name)}</b>. Tạo tài khoản xong là xem được địa chỉ IP máy chủ ngay, không phải chờ duyệt.`;
+        $('#fName').value = inviteInfo.name;
+      }
+    }
+    setMode(needSetup ? 'register' : inviteInfo ? 'register' : 'login');
     if (me) enter(); else show('auth');
   } catch (err) { show('auth'); $('#authErr').textContent = 'Không kết nối được máy chủ: ' + err.message; }
 })();

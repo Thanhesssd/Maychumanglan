@@ -57,10 +57,6 @@ input.in, select.in, textarea.in { width: 100%; padding: 9px 12px; border: 1px s
 .err { color: var(--bad); font-size: 13px; min-height: 1.2em; }
 
 .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.st-moi { background: var(--info-bg); color: var(--info); }
-.st-xac_nhan { background: var(--warn-bg); color: var(--warn); }
-.st-da_giao { background: var(--ok-bg); color: var(--ok); }
-.st-huy { background: var(--bad-bg); color: var(--bad); }
 
 .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; width: min(360px, calc(100% - 32px)); }
 .toast { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow);

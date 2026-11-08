@@ -40,9 +40,7 @@ const config = {
   ...saved,
   lanchat: { url: 'http://localhost:8000', ...(saved.lanchat || {}) },
 };
-// Mã thiết lập: chỉ dùng khi tạo tài khoản quản trị đầu tiên (giữ số cũ của adminPin nếu có)
-config.setupCode = config.setupCode || config.adminPin || String(crypto.randomInt(100000, 1000000));
-for (const k of ['shopName', 'bank', 'adminPin']) delete config[k];
+for (const k of ['shopName', 'bank', 'adminPin', 'setupCode']) delete config[k];
 for (const k of ['name', 'password', 'enabled']) delete config.lanchat[k];
 writeJson(CONFIG_FILE, config);
 const PORT = +process.env.PORT || config.port;
@@ -50,7 +48,10 @@ if (process.env.LANCHAT_URL) config.lanchat.url = process.env.LANCHAT_URL;
 
 // ---------- Tài khoản ----------
 const db = readJson(USERS_FILE, { seq: 0, users: [] });
+db.invites ||= []; // link mời: { token, name, createdBy, createdAt, exp, usedBy, usedAt }
 const saveUsers = () => writeJson(USERS_FILE, db);
+const INVITE_DAYS = 7;
+const findInvite = token => db.invites.find(i => i.token === String(token) && !i.usedBy && i.exp > Date.now());
 const sessions = new Map(Object.entries(readJson(SESSIONS_FILE, {})).filter(([, s]) => s.exp > Date.now()));
 const saveSessions = () => writeJson(SESSIONS_FILE, Object.fromEntries(sessions));
 const STATUS = { pending: 'Chờ cấp quyền', approved: 'Đã cấp quyền', blocked: 'Bị chặn' };
@@ -130,7 +131,12 @@ function deviceName(ua = '') {
   const browser = [['Edg/', 'Edge'], ['CriOS', 'Chrome'], ['Chrome/', 'Chrome'], ['Firefox/', 'Firefox'], ['Safari/', 'Safari']].find(([k]) => ua.includes(k))?.[1] || 'trình duyệt';
   return `${osName} · ${browser}`;
 }
-const clientIp = req => (req.socket.remoteAddress || '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+const socketIp = req => (req.socket.remoteAddress || '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
+// Qua đường hầm Cloudflare mọi kết nối đều đến từ 127.0.0.1; địa chỉ thật của khách nằm trong header CF-Connecting-IP
+const viaTunnel = req => socketIp(req) === '127.0.0.1' && !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);
+const clientIp = req => viaTunnel(req) ? String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']).split(',')[0].trim() : socketIp(req);
+// Yêu cầu đến từ chính máy chủ (localhost hoặc IP của máy này), không phải khách đi qua đường hầm Internet
+const onServer = req => { if (viaTunnel(req)) return false; const ip = socketIp(req); return ip === '127.0.0.1' || lanAddresses().some(a => a.ip === ip); };
 
 function normUrl(u) {
   u = String(u || '').trim();
@@ -205,12 +211,28 @@ function pushMe(uid) {
 
 function networkInfo() {
   return {
-    hostname: os.hostname(), port: PORT, uptime: Math.round(process.uptime()), addresses: lanAddresses(),
+    hostname: os.hostname(), port: PORT, uptime: Math.round(process.uptime()), addresses: lanAddresses(), publicUrl: publicUrl(),
     devices: [...clients].map(c => ({ user: userOf(c)?.name || '—', username: userOf(c)?.username, ip: c.ip, device: c.device, since: c.since })),
     lanchat: { url: config.lanchat.url, ...chat }, connect: connectAddresses(),
   };
 }
-function adminData() { return { title: config.title, network: networkInfo(), users: db.users.map(publicUser), statuses: STATUS }; }
+// Link mời dùng IP Wi‑Fi/LAN thật của máy này, để máy khác trong mạng mở được
+// Link Internet do chia-se-internet.bat ghi ra (đường hầm Cloudflare), nếu đang bật
+const PUBLIC_URL_FILE = path.join(DATA, 'public_url.txt');
+function publicUrl() {
+  try { return fs.readFileSync(PUBLIC_URL_FILE, 'utf8').trim().replace(/\/+$/, '') || null; } catch { return null; }
+}
+function inviteUrl(token) {
+  const pub = publicUrl();
+  if (pub) return `${pub}/?moi=${token}`;
+  const a = lanAddresses()[0];
+  return `http://${a ? a.ip : 'localhost'}:${PORT}/?moi=${token}`;
+}
+function invitesView() {
+  return db.invites.filter(i => !i.usedBy && i.exp > Date.now()).sort((a, b) => b.createdAt - a.createdAt)
+    .map(i => ({ token: i.token, name: i.name, createdBy: i.createdBy, createdAt: i.createdAt, exp: i.exp, url: inviteUrl(i.token) }));
+}
+function adminData() { return { title: config.title, network: networkInfo(), users: db.users.map(publicUser), invites: invitesView(), statuses: STATUS }; }
 
 // ---------- Tự tìm máy chủ LAN Chat trong mạng LAN (quét cổng 8443 trong dải /24) ----------
 let scanning = null;
@@ -278,7 +300,7 @@ async function route(req, res) {
   // ----- Tài khoản -----
   if (req.method === 'GET' && p === '/api/auth/me') {
     if (me) { touch(me, req); saveUsers(); }
-    return json(res, { user: me ? publicUser(me) : null, needSetup: !hasAdmin(), title: config.title });
+    return json(res, { user: me ? publicUser(me) : null, needSetup: !hasAdmin(), onServer: onServer(req), title: config.title });
   }
 
   if (req.method === 'POST' && p === '/api/auth/register') {
@@ -294,22 +316,23 @@ async function route(req, res) {
     if (recent.length >= 10) return json(res, { error: 'Máy này đã đăng ký nhiều tài khoản. Hãy thử lại sau' }, 429);
     if (findUser(username)) return json(res, { error: 'Tên đăng nhập này đã có người dùng', field: 'username' }, 409);
     const first = !hasAdmin();
-    if (first) {
-      // Tài khoản đầu tiên là quản trị: phải có mã thiết lập in ở cửa sổ máy chủ
-      const k = 'setup:' + ip;
-      if (locked(k)) return json(res, { error: `Nhập sai mã thiết lập nhiều lần. Thử lại sau ${locked(k)} giây` }, 429);
-      const a = Buffer.from(String(b.setupCode || '').trim()), c = Buffer.from(config.setupCode);
-      if (a.length !== c.length || !crypto.timingSafeEqual(a, c)) { failed(k); return json(res, { error: 'Sai mã thiết lập. Mã in ở cửa sổ máy chủ', field: 'setupCode' }, 403); }
-    }
+    // Tài khoản đầu tiên là quản trị: chỉ tạo được trên chính máy chủ, để người khác trong mạng không chiếm quyền
+    if (first && !onServer(req)) return json(res, { error: `Chưa có quản trị viên. Hãy tạo tài khoản quản trị trên chính máy chủ: http://localhost:${PORT}/` }, 403);
+    // Đăng ký bằng link mời của quản trị viên: được cấp quyền ngay, link chỉ dùng một lần
+    const inv = !first && b.invite ? findInvite(b.invite) : null;
+    if (b.invite && !first && !inv) return json(res, { error: 'Link mời đã hết hạn hoặc đã được dùng. Hãy xin quản trị viên link mới' }, 410);
     signups.set(ip, [...recent, now]);
     const salt = crypto.randomBytes(16).toString('hex');
+    const approved = first || !!inv;
     const u = { id: ++db.seq, username, name, salt, hash: hashPassword(password, salt), role: first ? 'admin' : 'user',
-      status: first ? 'approved' : 'pending', createdAt: now, approvedBy: first ? 'Tự động (quản trị đầu tiên)' : null, approvedAt: first ? now : null };
+      status: approved ? 'approved' : 'pending', createdAt: now, approvedAt: approved ? now : null,
+      approvedBy: first ? 'Tự động (quản trị đầu tiên)' : inv ? `Link mời của ${inv.createdBy}` : null };
     touch(u, req);
     db.users.push(u);
+    if (inv) { inv.usedBy = username; inv.usedAt = now; }
     saveUsers();
     startSession(res, u);
-    log(`Đăng ký: ${username} (${name}) từ ${ip}${first ? ' · quản trị' : ' · chờ cấp quyền'}`);
+    log(`Đăng ký: ${username} (${name}) từ ${ip}${first ? ' · quản trị' : inv ? ' · cấp quyền qua link mời' : ' · chờ cấp quyền'}`);
     pushAdmin();
     return json(res, { user: publicUser(u) });
   }
@@ -335,6 +358,12 @@ async function route(req, res) {
     if (token) { sessions.delete(tokenKey(token)); saveSessions(); }
     res.setHeader('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
     return json(res, { ok: true });
+  }
+
+  // Người được mời mở link: chỉ cho biết tên được mời, không lộ gì khác
+  if (req.method === 'GET' && p === '/api/invite') {
+    const inv = findInvite(url.searchParams.get('t'));
+    return inv ? json(res, { name: inv.name, createdBy: inv.createdBy }) : json(res, { error: 'Link mời đã hết hạn hoặc đã được dùng' }, 404);
   }
 
   // ----- Thời gian thực -----
@@ -366,6 +395,29 @@ async function route(req, res) {
     if (req.method === 'GET' && p === '/api/admin/data') return json(res, adminData());
     if (req.method === 'POST' && p === '/api/admin/check') { await checkChat(); return json(res, adminData()); }
     if (req.method === 'POST' && p === '/api/admin/scan') return json(res, await scanLan());
+
+    if (req.method === 'POST' && p === '/api/admin/invites') {
+      const b = await readBody(req);
+      const name = String(b.name || '').trim().replace(/\s+/g, ' ');
+      if (name.length < 2 || name.length > 60) return json(res, { error: 'Nhập tên người được mời (2–60 ký tự)' }, 400);
+      if (db.invites.filter(i => !i.usedBy && i.exp > Date.now()).length >= 100) return json(res, { error: 'Đã có quá nhiều link mời chưa dùng. Hãy hủy bớt' }, 400);
+      const inv = { token: crypto.randomBytes(16).toString('base64url'), name, createdBy: me.name, createdAt: Date.now(), exp: Date.now() + INVITE_DAYS * 864e5 };
+      // Dọn link đã dùng hoặc hết hạn quá 30 ngày
+      db.invites = db.invites.filter(i => Date.now() - (i.usedAt || i.exp) < 30 * 864e5);
+      db.invites.push(inv);
+      saveUsers();
+      log(`${me.username}: tạo link mời cho "${name}"`);
+      pushAdmin();
+      return json(res, { ...adminData(), created: { name, url: inviteUrl(inv.token) } });
+    }
+
+    if (req.method === 'POST' && p === '/api/admin/invites/cancel') {
+      const b = await readBody(req);
+      db.invites = db.invites.filter(i => i.token !== String(b.token));
+      saveUsers();
+      pushAdmin();
+      return json(res, adminData());
+    }
 
     if (req.method === 'POST' && p === '/api/admin/config') {
       const b = await readBody(req);
@@ -419,7 +471,7 @@ server.listen(PORT, '0.0.0.0', () => {
   log(`${config.title} đang chạy:`);
   log(`  Trên máy này:  http://localhost:${PORT}/   ·   quản trị: http://localhost:${PORT}/quan-ly`);
   for (const a of lanAddresses()) log(`  ${a.virtual ? 'Card mạng ảo' : 'Mạng LAN'} (${a.iface}): http://${a.ip}:${PORT}/`);
-  if (!hasAdmin()) log(`  Chưa có quản trị viên. Đăng ký tài khoản đầu tiên với MÃ THIẾT LẬP: ${config.setupCode}`);
+  if (!hasAdmin()) log(`  Chưa có quản trị viên. Mở http://localhost:${PORT}/ trên máy này và đăng ký: tài khoản đầu tiên là quản trị viên`);
   else log(`  ${db.users.length} tài khoản · ${db.users.filter(u => u.status === 'pending').length} đang chờ cấp quyền`);
   log(`  Máy chủ LAN Chat: ${config.lanchat.url}`);
   checkChat();

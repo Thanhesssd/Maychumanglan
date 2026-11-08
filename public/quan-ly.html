@@ -29,6 +29,9 @@
   .s-pending { background: var(--warn-bg); color: var(--warn); }
   .s-approved { background: var(--ok-bg); color: var(--ok); }
   .s-blocked { background: var(--bad-bg); color: var(--bad); }
+  .s-admin { background: var(--info-bg); color: var(--info); }
+  .invite-new { padding: 12px; border: 2px dashed var(--ok); border-radius: 12px; background: var(--ok-bg); display: grid; gap: 8px; }
+  .invite-new input { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
   .acts { display: flex; gap: 6px; flex-wrap: wrap; }
   tr.pending td { background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
   .filters { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -77,6 +80,20 @@
         <thead><tr><th>Tài khoản</th><th>Trạng thái</th><th>IP gần nhất</th><th>Thiết bị</th><th>Đăng ký</th><th>Thao tác</th></tr></thead>
         <tbody id="userRows"></tbody>
       </table></div>
+    </div>
+
+    <!-- Mời người dùng: nhập tên, hệ thống cấp quyền sẵn và tạo link riêng để sao chép -->
+    <div class="card">
+      <div class="card-h"><h2 style="font-size:17px">Mời người dùng (cấp quyền sẵn)</h2><span class="muted small">Link dùng một lần, hết hạn sau 7 ngày</span></div>
+      <div class="card-b" style="display:grid;gap:12px">
+        <form id="inviteForm" style="display:flex;gap:8px;flex-wrap:wrap">
+          <input class="in" id="iName" maxlength="60" placeholder="Tên người được mời, vd: Nguyễn Văn An" style="flex:1;min-width:220px">
+          <button class="btn primary">Tạo link mời</button>
+        </form>
+        <div class="invite-new hidden" id="inviteNew"></div>
+        <p class="small muted" style="margin:0">Gửi link cho người đó (Zalo, tin nhắn…). Họ mở link trong cùng Wi‑Fi, đặt tên đăng nhập và mật khẩu, rồi thấy địa chỉ IP máy chủ ngay mà không phải chờ duyệt.</p>
+        <div class="list" id="invites"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -137,7 +154,15 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hms = t => new Date(t).toLocaleTimeString('vi-VN');
 const dt = t => t ? new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—';
-let me = null, N = {}, USERS = [], filter = 'pending', es = null, knownPending = null;
+let me = null, N = {}, USERS = [], INVITES = [], filter = 'pending', es = null, knownPending = null;
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { // trang http trong mạng LAN có thể không dùng được clipboard API
+    const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove();
+  }
+  toast('Đã sao chép link mời', 'Dán vào Zalo hoặc tin nhắn để gửi đi');
+}
 
 function toast(title, text = '') {
   const el = document.createElement('div');
@@ -155,14 +180,20 @@ async function api(path, body) {
 }
 
 function apply(d) {
-  N = d.network; USERS = d.users;
+  N = d.network; USERS = d.users; INVITES = d.invites || [];
   const pending = USERS.filter(u => u.status === 'pending');
   if (knownPending) for (const u of pending) if (!knownPending.has(u.id)) toast('🔔 Có tài khoản mới chờ cấp quyền', `${u.name} (${u.username}) · ${u.lastIp}`);
   knownPending = new Set(pending.map(u => u.id));
   render();
 }
 
-function render() { renderUsers(); renderNetwork(); }
+function render() { renderUsers(); renderInvites(); renderNetwork(); }
+
+function renderInvites() {
+  $('#invites').innerHTML = INVITES.length ? '<b class="small">Link mời chưa dùng</b>' + INVITES.map(i => `<div class="row"><div class="grow"><b>${esc(i.name)}</b>
+    <span class="small muted">· tạo ${dt(i.createdAt)} bởi ${esc(i.createdBy)} · hết hạn ${dt(i.exp)}</span></div>
+    <button class="btn sm" data-copy="${esc(i.url)}">📋 Sao chép link</button><button class="btn sm ghost" data-cancel="${esc(i.token)}">Hủy</button></div>`).join('') : '';
+}
 
 const ACT = {
   approve: ['Cấp quyền', 'ok'], revoke: ['Thu hồi', ''], block: ['Chặn', ''], 'make-admin': ['Làm quản trị', ''],
@@ -190,7 +221,7 @@ function renderUsers() {
   });
   const list = USERS.filter(u => !filter || u.status === filter).sort((a, b) => b.createdAt - a.createdAt);
   $('#userRows').innerHTML = list.map(u => `<tr class="${u.status === 'pending' ? 'pending' : ''}">
-    <td><b>${esc(u.name)}</b>${u.role === 'admin' ? ' <span class="badge st-moi">Quản trị</span>' : ''}<br><span class="small muted mono">${esc(u.username)}</span></td>
+    <td><b>${esc(u.name)}</b>${u.role === 'admin' ? ' <span class="badge s-admin">Quản trị</span>' : ''}<br><span class="small muted mono">${esc(u.username)}</span></td>
     <td><span class="badge s-${u.status}">${esc(u.statusLabel)}</span>${u.approvedBy && u.status === 'approved' ? `<br><span class="small muted">bởi ${esc(u.approvedBy)}</span>` : ''}</td>
     <td class="mono small">${esc(u.lastIp || '—')}<br><span class="muted">${dt(u.lastSeen)}</span></td>
     <td class="small">${esc(u.device || '—')}</td><td class="small num">${dt(u.createdAt)}</td><td>${actionsFor(u)}</td></tr>`).join('')
@@ -240,9 +271,36 @@ document.addEventListener('click', async e => {
     catch (err) { toast('Không thực hiện được', err.message); t.disabled = false; }
     return;
   }
+  const cp = e.target.closest('[data-copy]');
+  if (cp) return copy(cp.dataset.copy);
+  const cancel = e.target.closest('[data-cancel]');
+  if (cancel) {
+    if (!confirm('Hủy link mời này? Người nhận sẽ không dùng được nữa.')) return;
+    try { apply(await api('admin/invites/cancel', { token: cancel.dataset.cancel })); $('#inviteNew').classList.add('hidden'); toast('Đã hủy link mời'); }
+    catch (err) { toast('Không hủy được', err.message); }
+    return;
+  }
   const use = e.target.closest('[data-use]');
   if (use) { $('#cUrl').value = use.dataset.use; $('#cfgForm').requestSubmit(); }
 });
+
+$('#inviteForm').onsubmit = async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button');
+  btn.disabled = true;
+  try {
+    const d = await api('admin/invites', { name: $('#iName').value });
+    apply(d);
+    const box = $('#inviteNew');
+    box.innerHTML = `<b>✅ Đã tạo link mời cho ${esc(d.created.name)}</b>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="in" readonly value="${esc(d.created.url)}" style="flex:1;min-width:220px" onclick="this.select()">
+      <button class="btn ok" type="button" data-copy="${esc(d.created.url)}">📋 Sao chép</button></div>`;
+    box.classList.remove('hidden');
+    $('#iName').value = '';
+    copy(d.created.url);
+  } catch (err) { toast('Không tạo được link', err.message); }
+  finally { btn.disabled = false; }
+};
 
 $('#cfgForm').onsubmit = async e => {
   e.preventDefault(); $('#cfgErr').textContent = '';
