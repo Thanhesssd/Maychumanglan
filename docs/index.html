@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kết nối máy chủ LAN</title>
+<meta name="description" content="Đăng ký, đăng nhập để nhận địa chỉ IP kết nối máy chủ LAN Chat.">
+<style>
+  :root { --bg: #f6f3ef; --panel: #fff; --text: #24201c; --muted: #7a7067; --border: #e6ded5; --primary: #8a4b22; --on-primary: #fff; --bad: #b91c1c; --ok: #15803d; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15120f; --panel: #1f1a16; --text: #f1ebe4; --muted: #a89c90; --border: #3a322b; --primary: #d08a4f; --on-primary: #1b120b; --bad: #f87171; --ok: #4ade80; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; text-align: center; box-shadow: 0 4px 16px rgba(40, 25, 10, .08); }
+  h1 { font-size: 24px; margin: 8px 0; }
+  .icon { font-size: 44px; }
+  .btn { display: inline-block; margin-top: 16px; padding: 12px 22px; border-radius: 12px; background: var(--primary); color: var(--on-primary); font-weight: 700; text-decoration: none; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .link { font-family: ui-monospace, Consolas, monospace; font-size: 13px; word-break: break-all; color: var(--muted); }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <div class="icon">🌐</div>
+  <h1>Kết nối máy chủ LAN</h1>
+  <p class="muted" id="msg">Đang tìm địa chỉ app…</p>
+  <a class="btn" id="go" href="#" hidden>Mở app</a>
+  <p class="link" id="link"></p>
+  <p class="muted">Đăng ký hoặc đăng nhập, chờ quản trị viên cấp quyền để nhận địa chỉ IP máy chủ LAN Chat.</p>
+</main>
+<script>
+// Link app (đường hầm Cloudflare) đổi mỗi lần máy chủ bật lại; máy chủ tự cập nhật file link.txt này
+(async () => {
+  const msg = document.getElementById('msg'), go = document.getElementById('go');
+  try {
+    const r = await fetch('link.txt?t=' + Date.now(), { cache: 'no-store' });
+    const url = (await r.text()).trim();
+    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url)) throw new Error('Chưa có link');
+    const target = url.replace(/\/?$/, '/') + location.search; // giữ ?moi=… của link mời
+    go.href = target; go.hidden = false;
+    document.getElementById('link').textContent = url;
+    msg.textContent = 'Đang chuyển tới app… Nếu không tự chuyển, bấm nút bên dưới.';
+    setTimeout(() => location.replace(target), 1200);
+  } catch (e) {
+    msg.innerHTML = '<span class="err">Máy chủ đang tắt hoặc chưa bật link Internet.</span><br>Hãy thử lại sau ít phút hoặc liên hệ quản trị viên.';
+  }
+})();
+</script>
+</body>
+</html>

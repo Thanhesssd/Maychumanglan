@@ -22,6 +22,30 @@ function findCloudflared() {
   process.exit(1);
 }
 
+// Cập nhật link mới lên GitHub Pages (docs/link.txt) để link cố định https://<tài khoản>.github.io/<repo>/
+// luôn chuyển tới app. Chỉ đẩy đúng 2 file link, không đụng tới thay đổi khác đang làm dở.
+// Tắt bằng biến môi trường KHONG_DAY_GITHUB=1.
+function publishToGitHub(url) {
+  if (process.env.KHONG_DAY_GITHUB) return;
+  const git = (...args) => execFileSync('git', args, { cwd: __dirname, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+  try {
+    git('rev-parse', '--is-inside-work-tree');
+    fs.mkdirSync(path.join(__dirname, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(__dirname, 'docs', 'link.txt'), url + '\n');
+    const readme = path.join(__dirname, 'README.md');
+    if (fs.existsSync(readme)) fs.writeFileSync(readme, fs.readFileSync(readme, 'utf8').replace(/\*\*https:\/\/[a-z0-9-]+\.trycloudflare\.com\*\*/, `**${url}**`));
+    git('add', 'docs/link.txt', 'README.md');
+    if (!git('diff', '--cached', '--name-only')) return console.log('Link trên GitHub đã đúng, không cần cập nhật.');
+    git('commit', '-m', 'Cập nhật link truy cập app', '--', 'docs/link.txt', 'README.md');
+    console.log('Đang đẩy link mới lên GitHub…');
+    git('push');
+    const remote = git('remote', 'get-url', 'origin').match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+    console.log('✅ Đã cập nhật GitHub.' + (remote ? ` Link cố định: https://${remote[1].toLowerCase()}.github.io/${remote[2]}/` : ''));
+  } catch (e) {
+    console.log('⚠ Không cập nhật được link lên GitHub: ' + String(e.stderr || e.message).trim().split('\n').pop());
+  }
+}
+
 const clear = () => { try { fs.unlinkSync(OUT); } catch { } };
 clear();
 const cf = spawn(findCloudflared(), ['tunnel', '--no-autoupdate', '--url', `http://localhost:${PORT}`], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -31,6 +55,7 @@ const onData = buf => {
   if (!m) return;
   found = true;
   fs.writeFileSync(OUT, m[0]);
+  publishToGitHub(m[0]);
   console.log('\n==============================================');
   console.log(' Link Internet cho mọi người:');
   console.log(' ' + m[0]);

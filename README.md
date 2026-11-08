@@ -7,6 +7,8 @@ Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR
 
 **https://vegetable-dense-requesting-grand.trycloudflare.com**
 
+Link cố định (không đổi, tự chuyển tới app): **https://thanhesssd.github.io/Maychumanglan/**
+
 Mở được trên Chrome ở mọi nơi (Wi‑Fi, 4G). Link chỉ hoạt động khi máy chủ đang bật, và **đổi mỗi lần bật lại đường hầm**:
 khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu code; app chạy trên máy chủ của chủ sở hữu.
 
