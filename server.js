@@ -150,6 +150,8 @@ function deviceName(ua = '') {
 const socketIp = req => (req.socket.remoteAddress || '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
 // Qua đường hầm Cloudflare mọi kết nối đều đến từ 127.0.0.1; địa chỉ thật của khách nằm trong header CF-Connecting-IP
 const viaTunnel = req => socketIp(req) === '127.0.0.1' && !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);
+// Máy cùng Wi‑Fi/LAN: kết nối thẳng (không qua đường hầm Internet) từ địa chỉ nội bộ. Dựa vào địa chỉ TCP, không tin header.
+const sameLan = req => !viaTunnel(req) && /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(socketIp(req));
 const clientIp = req => viaTunnel(req) ? String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']).split(',')[0].trim() : socketIp(req);
 // Yêu cầu đến từ chính máy chủ (localhost hoặc IP của máy này), không phải khách đi qua đường hầm Internet
 const onServer = req => { if (viaTunnel(req)) return false; const ip = socketIp(req); return ip === '127.0.0.1' || lanAddresses().some(a => a.ip === ip); };
@@ -281,7 +283,7 @@ function invitesView() {
   return db.invites.filter(i => !i.usedBy && i.exp > Date.now()).sort((a, b) => b.createdAt - a.createdAt)
     .map(i => ({ token: i.token, name: i.name, createdBy: i.createdBy, createdAt: i.createdAt, exp: i.exp, url: inviteUrl(i.token) }));
 }
-function adminData() { return { title: config.title, network: networkInfo(), users: db.users.map(publicUser), invites: invitesView(), statuses: STATUS }; }
+function adminData() { return { title: config.title, autoApprove: config.autoApprove || 'off', network: networkInfo(), users: db.users.map(publicUser), invites: invitesView(), statuses: STATUS }; }
 
 // ---------- Tự tìm máy chủ LAN Chat trong mạng LAN (quét cổng 8443 trong dải /24) ----------
 let scanning = null;
@@ -379,10 +381,12 @@ async function route(req, res) {
     if (b.invite && !first && !inv) return json(res, { error: 'Link mời đã hết hạn hoặc đã được dùng. Hãy xin quản trị viên link mới' }, 410);
     signups.set(ip, [...recent, now]);
     const salt = crypto.randomBytes(16).toString('hex');
-    const approved = first || !!inv;
+    // Tự động cấp quyền (quản trị viên bật trong trang quản trị): 'all' = mọi người, 'lan' = chỉ máy cùng Wi‑Fi/LAN
+    const auto = !first && !inv && (config.autoApprove === 'all' || (config.autoApprove === 'lan' && sameLan(req)));
+    const approved = first || !!inv || auto;
     const u = { id: ++db.seq, username, name, salt, hash: hashPassword(password, salt), role: first ? 'admin' : 'user',
       status: approved ? 'approved' : 'pending', createdAt: now, approvedAt: approved ? now : null,
-      approvedBy: first ? 'Tự động (quản trị đầu tiên)' : inv ? `Link mời của ${inv.createdBy}` : null };
+      approvedBy: first ? 'Tự động (quản trị đầu tiên)' : inv ? `Link mời của ${inv.createdBy}` : auto ? 'Tự động cấp quyền' : null };
     touch(u, req);
     db.users.push(u);
     if (inv) { inv.usedBy = username; inv.usedAt = now; }
@@ -430,6 +434,19 @@ async function route(req, res) {
     log(`${me.username} đã đổi mật khẩu`);
     pushAdmin();
     return json(res, { user: publicUser(me) });
+  }
+
+  // Người đang chờ bấm "Nhắc quản trị viên": gửi thông báo tới các trang quản trị đang mở (tối đa 1 lần/phút)
+  if (req.method === 'POST' && p === '/api/auth/remind') {
+    if (!me) return json(res, { error: 'Cần đăng nhập' }, 401);
+    if (me.status !== 'pending') return json(res, { error: 'Tài khoản không ở trạng thái chờ cấp quyền' }, 400);
+    const wait = Math.ceil(((me.remindedAt || 0) + 60000 - Date.now()) / 1000);
+    if (wait > 0) return json(res, { error: `Bạn vừa nhắc rồi. Thử lại sau ${wait} giây` }, 429);
+    me.remindedAt = Date.now();
+    saveUsers();
+    let admins = 0;
+    for (const c of clients) if (isAdmin(userOf(c))) { send(c, 'remind', { id: me.id, name: me.name, username: me.username }); admins++; }
+    return json(res, { ok: true, admins });
   }
 
   if (req.method === 'POST' && p === '/api/auth/logout') {
@@ -538,6 +555,27 @@ async function route(req, res) {
       pushInfo();
       pushAdmin();
       return json(res, adminData());
+    }
+
+    if (req.method === 'POST' && p === '/api/admin/auto-approve') {
+      const b = await readBody(req);
+      if (!['off', 'lan', 'all'].includes(b.mode)) return json(res, { error: 'Chế độ không hợp lệ' }, 400);
+      config.autoApprove = b.mode;
+      writeJson(CONFIG_FILE, config);
+      log(`${me.username}: tự động cấp quyền = ${b.mode}`);
+      pushAdmin();
+      return json(res, adminData());
+    }
+
+    // Cấp quyền một lần cho mọi tài khoản đang chờ
+    if (req.method === 'POST' && p === '/api/admin/approve-all') {
+      const list = db.users.filter(u => u.status === 'pending');
+      for (const u of list) { u.status = 'approved'; u.approvedBy = me.name; u.approvedAt = Date.now(); }
+      saveUsers();
+      log(`${me.username}: cấp quyền tất cả (${list.length})`);
+      for (const u of list) pushMe(u.id);
+      pushAdmin();
+      return json(res, { ...adminData(), approvedCount: list.length });
     }
 
     if (req.method === 'POST' && p === '/api/admin/config') {

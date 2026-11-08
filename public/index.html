@@ -102,6 +102,8 @@ if (location.protocol === 'file:') document.write(
     <h2>Đang chờ cấp quyền</h2>
     <p class="muted">Tài khoản <b id="pendingUser"></b> đã được tạo. Quản trị viên cần bấm <b>Cấp quyền</b> thì bạn mới xem được địa chỉ IP mạng LAN.</p>
     <p class="small muted">Giữ trang này mở, địa chỉ sẽ tự hiện ngay khi được cấp quyền.</p>
+    <button class="btn primary" id="btnRemind" type="button">🙋 Nhắc quản trị viên</button>
+    <p class="small muted" id="remindMsg" style="margin-top:8px"></p>
   </div>
 </section>
 
@@ -235,6 +237,19 @@ function renderMe() {
   if (!$('#passView').classList.contains('hidden')) return; // đang tự đổi mật khẩu thì giữ nguyên màn hình
   show(me.status === 'approved' ? 'info' : 'pending');
 }
+
+// Người đang chờ: gửi thông báo tới quản trị viên đang mở trang quản trị (tối đa 1 lần/phút)
+$('#btnRemind').onclick = async () => {
+  const btn = $('#btnRemind');
+  btn.disabled = true;
+  try {
+    const d = await api('auth/remind', {});
+    $('#remindMsg').textContent = d.admins
+      ? `✅ Đã báo ${d.admins} quản trị viên đang trực tuyến. Địa chỉ sẽ tự hiện khi được cấp quyền.`
+      : 'Hiện chưa có quản trị viên nào mở trang quản trị. Hãy nhắn trực tiếp cho quản trị viên, hoặc nhờ họ gửi link mời.';
+  } catch (err) { $('#remindMsg').textContent = err.message; }
+  setTimeout(() => { btn.disabled = false; }, 60000);
+};
 
 // ---------- Đổi / quên mật khẩu ----------
 function openPass(must = false) {

@@ -239,6 +239,28 @@
         </div>
   </div>
 
+  <!-- Cấp quyền nhanh: người đang chờ hiện ngay đầu trang, bấm một lần là xong -->
+  <div class="card hidden" id="quickCard" style="border:2px solid var(--warn)">
+    <div class="card-h">
+      <h2 style="font-size:17px">⏳ Đang chờ cấp quyền <span class="badge s-pending" id="quickCount"></span></h2>
+      <button class="btn ok" id="btnApproveAll" type="button">✅ Cấp quyền tất cả</button>
+    </div>
+    <div class="card-b list" id="quickList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-b" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <b>⚡ Tự động cấp quyền</b>
+      <select class="in" id="autoMode" style="width:auto">
+        <option value="off">Tắt: quản trị viên duyệt từng người</option>
+        <option value="lan">Chỉ máy cùng Wi‑Fi / mạng LAN</option>
+        <option value="all">Tất cả mọi người (kể cả 4G, mạng khác)</option>
+      </select>
+      <button class="btn sm" id="btnNotify" type="button">🔔 Bật thông báo khi có người đăng ký</button>
+      <p class="small muted" style="margin:0;flex-basis:100%" id="autoNote"></p>
+    </div>
+  </div>
+
   <!-- Cấp quyền tài khoản -->
   <div class="card">
     <div class="card-h">
@@ -414,15 +436,77 @@
       return d;
     }
 
+    let AUTO = 'off';
     function apply(d) {
-      N = d.network; USERS = d.users; INVITES = d.invites || [];
+      N = d.network; USERS = d.users; INVITES = d.invites || []; AUTO = d.autoApprove || 'off';
       const pending = USERS.filter(u => u.status === 'pending');
-      if (knownPending) for (const u of pending) if (!knownPending.has(u.id)) toast('🔔 Có tài khoản mới chờ cấp quyền', `${u.name} (${u.username}) · ${u.lastIp}`);
+      if (knownPending) for (const u of pending) if (!knownPending.has(u.id)) alertAdmin('🔔 Có người chờ cấp quyền', `${u.name} (${u.username}) · ${u.lastIp || ''}`, u.id);
       knownPending = new Set(pending.map(u => u.id));
       render();
     }
 
-    function render() { renderUsers(); renderInvites(); renderNetwork(); }
+    function render() { renderUsers(); renderQuick(); renderInvites(); renderNetwork(); }
+
+    // ---------- Cấp quyền nhanh ----------
+    function beep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        [880, 1320].forEach((f, i) => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.frequency.value = f; g.gain.value = .15;
+          o.connect(g).connect(ctx.destination);
+          o.start(ctx.currentTime + i * .18); o.stop(ctx.currentTime + i * .18 + .15);
+        });
+      } catch { }
+    }
+    // Báo cả khi đang ở tab khác: thông báo của trình duyệt + tiếng "ting"; bấm thông báo là mở trang này
+    function alertAdmin(title, text, uid) {
+      toast(title, text);
+      beep();
+      try {
+        if (window.Notification && Notification.permission === 'granted' && document.hidden) {
+          const n = new Notification(title, { body: text + '\nBấm để mở trang cấp quyền', tag: 'cho-cap-quyen-' + uid });
+          n.onclick = () => { window.focus(); n.close(); };
+        }
+      } catch { }
+    }
+
+    function renderQuick() {
+      const pending = USERS.filter(u => u.status === 'pending').sort((a, b) => a.createdAt - b.createdAt);
+      $('#quickCard').classList.toggle('hidden', !pending.length);
+      $('#quickCount').textContent = pending.length;
+      $('#quickList').innerHTML = pending.map(u => `<div class="row"><div class="grow"><b>${esc(u.name)}</b> <span class="small muted mono">${esc(u.username)}</span><br>
+        <span class="small muted">đăng ký ${dt(u.createdAt)} · ${esc(u.lastIp || '')} · ${esc(u.device || '')}</span></div>
+        <button class="btn ok" data-uid="${u.id}" data-act="approve">✅ Cấp quyền</button>
+        <button class="btn sm ghost" data-uid="${u.id}" data-act="block">Chặn</button></div>`).join('');
+      $('#autoMode').value = AUTO;
+      $('#autoNote').innerHTML = AUTO === 'all'
+        ? '⚠ Ai có link cũng được cấp quyền ngay và thấy địa chỉ IP máy chủ. Chỉ nên bật khi đang cần nhiều người vào nhanh.'
+        : AUTO === 'lan' ? 'Người đăng ký từ máy cùng Wi‑Fi / mạng LAN được cấp quyền ngay; người ở ngoài (4G, link Internet) vẫn chờ duyệt.'
+        : 'Mỗi người đăng ký phải chờ bạn bấm Cấp quyền. Bật thông báo để biết ngay khi có người đăng ký.';
+      const nb = $('#btnNotify');
+      const perm = window.Notification ? Notification.permission : 'unsupported';
+      nb.textContent = perm === 'granted' ? '🔔 Thông báo: đang bật' : perm === 'denied' ? '🔕 Thông báo bị chặn (bật lại trong cài đặt trình duyệt)' : '🔔 Bật thông báo khi có người đăng ký';
+      nb.disabled = perm !== 'default';
+    }
+
+    $('#btnNotify').onclick = async () => {
+      try { await Notification.requestPermission(); } catch { }
+      renderQuick();
+      if (Notification.permission === 'granted') toast('Đã bật thông báo', 'Có người đăng ký là trình duyệt báo ngay, kể cả khi bạn ở tab khác');
+    };
+    $('#autoMode').onchange = async e => {
+      const mode = e.target.value;
+      if (mode === 'all' && !confirm('Bật tự động cấp quyền cho TẤT CẢ? Bất kỳ ai có link đều thấy địa chỉ IP máy chủ ngay sau khi đăng ký.')) { e.target.value = AUTO; return; }
+      try { apply(await api('admin/auto-approve', { mode })); toast('Đã đổi chế độ tự động cấp quyền'); }
+      catch (err) { toast('Không đổi được', err.message); e.target.value = AUTO; }
+    };
+    $('#btnApproveAll').onclick = async () => {
+      const n = USERS.filter(u => u.status === 'pending').length;
+      if (!n || !confirm(`Cấp quyền cho cả ${n} tài khoản đang chờ?`)) return;
+      try { const d = await api('admin/approve-all', {}); apply(d); toast(`✅ Đã cấp quyền ${d.approvedCount} tài khoản`); }
+      catch (err) { toast('Không cấp quyền được', err.message); }
+    };
 
     function renderInvites() {
       $('#invites').innerHTML = INVITES.length ? '<b class="small">Link mời chưa dùng</b>' + INVITES.map(i => `<div class="row"><div class="grow"><b>${esc(i.name)}</b>
@@ -625,6 +709,7 @@
         if (es.readyState === EventSource.CLOSED) setTimeout(() => api('admin/data').then(d => { apply(d); connect(); }, () => { }), 3000);
       };
       es.addEventListener('admin', e => apply(JSON.parse(e.data)));
+      es.addEventListener('remind', e => { const u = JSON.parse(e.data); alertAdmin('🙋 ' + u.name + ' đang nhắc bạn cấp quyền', u.username, u.id); });
       es.addEventListener('me', e => { const u = JSON.parse(e.data); if (!u || u.role !== 'admin' || u.status !== 'approved') location.replace('/'); });
       es.addEventListener('scan', e => { const s = JSON.parse(e.data); $('#scanBar i').style.width = Math.round(s.done / s.total * 100) + '%'; });
     }
