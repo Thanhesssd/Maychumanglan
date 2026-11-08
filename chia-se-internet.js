@@ -35,14 +35,24 @@ function publishToGitHub(url) {
     const readme = path.join(__dirname, 'README.md');
     if (fs.existsSync(readme)) fs.writeFileSync(readme, fs.readFileSync(readme, 'utf8').replace(/\*\*https:\/\/[a-z0-9-]+\.trycloudflare\.com\*\*/, `**${url}**`));
     git('add', 'docs/link.txt', 'README.md');
-    if (!git('diff', '--cached', '--name-only')) return console.log('Link trên GitHub đã đúng, không cần cập nhật.');
-    git('commit', '-m', 'Cập nhật link truy cập app', '--', 'docs/link.txt', 'README.md');
-    console.log('Đang đẩy link mới lên GitHub…');
-    git('push');
-    const remote = git('remote', 'get-url', 'origin').match(/github\.com[/:]([^/]+)\/([^/.]+)/);
-    console.log('✅ Đã cập nhật GitHub.' + (remote ? ` Link cố định: https://${remote[1].toLowerCase()}.github.io/${remote[2]}/` : ''));
+    if (git('diff', '--cached', '--name-only')) git('commit', '-m', 'Cập nhật link truy cập app', '--', 'docs/link.txt', 'README.md');
   } catch (e) {
-    console.log('⚠ Không cập nhật được link lên GitHub: ' + String(e.stderr || e.message).trim().split('\n').pop());
+    return console.log('⚠ Không cập nhật được link: ' + String(e.stderr || e.message).trim().split('\n').pop());
+  }
+  // Đẩy lên mọi repo GitHub đã nối (origin = Maychumanglan, quanly = Quanlymanglan…).
+  // Nhánh gh-pages chứa thư mục docs: GitHub tự bật trang https://<tài khoản>.github.io/<repo>/ cho nhánh này.
+  console.log('Đang đẩy link mới lên GitHub…');
+  let pages = '';
+  try { pages = git('subtree', 'split', '--prefix', 'docs', 'HEAD'); } catch { }
+  for (const remote of git('remote').split(/\s+/).filter(Boolean)) {
+    const m = git('remote', 'get-url', remote).match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+    try {
+      git('push', remote, 'HEAD:main');
+      if (pages) git('push', '--force', remote, `${pages}:refs/heads/gh-pages`);
+      console.log(`✅ ${remote}: đã cập nhật.` + (m ? ` Link: https://${m[1].toLowerCase()}.github.io/${m[2]}/` : ''));
+    } catch (e) {
+      console.log(`⚠ ${remote}: không đẩy được (${String(e.stderr || e.message).trim().split('\n').pop()})`);
+    }
   }
 }
 
