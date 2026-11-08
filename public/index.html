@@ -253,7 +253,8 @@ function render(d) {
   document.title = d.title;
   $('#title').textContent = d.title;
   $('#dChat').className = 'dot ' + (d.ok ? 'on' : 'off');
-  $('#tChat').textContent = (d.ok ? 'Máy chủ LAN Chat: đang chạy' : 'Máy chủ LAN Chat: chưa kết nối được') + (d.checkedAt ? ' · ' + hms(d.checkedAt) : '');
+  const sv = d.servers || [], up = sv.filter(s => s.ok).length;
+  $('#tChat').textContent = (sv.length > 1 ? `Máy chủ LAN Chat: ${up}/${sv.length} đang chạy` : d.ok ? 'Máy chủ LAN Chat: đang chạy' : 'Máy chủ LAN Chat: chưa kết nối được') + (d.checkedAt ? ' · ' + hms(d.checkedAt) : '');
   const [main, ...rest] = d.addresses;
   if (!main) {
     $('#main').innerHTML = `<div class="empty"><div class="big">🔌</div><h2>Chưa tìm thấy máy chủ LAN Chat</h2>
@@ -264,7 +265,7 @@ function render(d) {
   $('#main').innerHTML = `<div class="hero">
     <div class="qrbox">${qrSvg(main.url)}</div>
     <div>
-      <div class="label">Địa chỉ IP để kết nối · ${KIND[main.kind]}</div>
+      <div class="label">Địa chỉ IP để kết nối · ${KIND[main.kind]}${sv.length > 1 && main.server ? ' · ' + esc(main.server) : ''}</div>
       <div class="addr">${esc(main.host)}</div>
       <div class="muted mono small" style="margin-top:4px">${esc(main.url)}</div>
       <div class="actions">
@@ -275,7 +276,7 @@ function render(d) {
       </div>
     </div></div>`;
   $('#otherCard').classList.toggle('hidden', !rest.length);
-  $('#others').innerHTML = rest.map(a => `<div class="row"><div class="grow"><b class="mono">${esc(a.host)}</b><br><span class="small muted">${KIND[a.kind]} · ${esc(a.url)}</span></div>
+  $('#others').innerHTML = rest.map(a => `<div class="row"><div class="grow"><b class="mono">${esc(a.host)}</b><br><span class="small muted">${sv.length > 1 && a.server ? '<b>' + esc(a.server) + '</b> · ' : ''}${KIND[a.kind]} · ${esc(a.url)}</span></div>
     <button class="btn sm" data-copy="${esc(a.host)}">Sao chép</button><a class="btn sm" href="${esc(a.url)}" target="_blank" rel="noopener">Mở</a></div>`).join('');
 }
 document.addEventListener('click', e => { const t = e.target.closest('[data-copy]'); if (t) copy(t.dataset.copy); });

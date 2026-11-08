@@ -42,6 +42,7 @@ const config = {
 };
 for (const k of ['shopName', 'bank', 'adminPin', 'setupCode']) delete config[k];
 for (const k of ['name', 'password', 'enabled']) delete config.lanchat[k];
+config.extraServers = Array.isArray(config.extraServers) ? config.extraServers.filter(s => s && s.id && s.url) : [];
 writeJson(CONFIG_FILE, config);
 const PORT = +process.env.PORT || config.port;
 if (process.env.LANCHAT_URL) config.lanchat.url = process.env.LANCHAT_URL;
@@ -168,23 +169,51 @@ function getHealth(base, timeout = 4000) {
   });
 }
 
-let chat = { ok: false, at: 0, error: 'Chưa kiểm tra' };
-async function checkChat() {
-  try { chat = { ok: true, at: Date.now(), ...(await getHealth(config.lanchat.url)) }; }
+async function checkOne(url) {
+  try { return { ok: true, at: Date.now(), ...(await getHealth(url)) }; }
   catch (e) {
     const error = e.code === 'ECONNREFUSED' ? 'Máy chủ LAN Chat chưa chạy hoặc sai địa chỉ'
       : e.code === 'ENOTFOUND' ? 'Không tìm thấy địa chỉ này' : e.code === 'TIMEOUT' ? 'Máy chủ không phản hồi' : e.message;
-    chat = { ok: false, at: Date.now(), error };
+    return { ok: false, at: Date.now(), error };
   }
+}
+
+// Máy chủ chính (config.lanchat) và các máy chủ phụ (config.extraServers: máy chủ thứ hai, thứ ba…)
+let chat = { ok: false, at: 0, error: 'Chưa kiểm tra' };
+const extraState = {}; // id máy chủ phụ -> kết quả kiểm tra
+async function checkChat() {
+  const [main, ...extras] = await Promise.all([checkOne(config.lanchat.url), ...config.extraServers.map(s => checkOne(s.url))]);
+  chat = main;
+  config.extraServers.forEach((s, i) => { extraState[s.id] = extras[i]; });
   pushInfo();
   pushAdmin();
 }
 setInterval(checkChat, 15000);
 
+function serversView() {
+  // id = mã trong danh sách (để xóa); serverId = mã máy chủ LAN Chat báo về (để nhận ra hai địa chỉ cùng một máy)
+  return config.extraServers.map(s => {
+    const st = extraState[s.id] || { ok: false, at: 0, error: 'Chưa kiểm tra' };
+    return { ...st, serverId: st.id || null, id: s.id, name: s.name, url: s.url };
+  });
+}
+
+function addressesOf(state, server) {
+  if (!state.ok) return [];
+  const list = (state.lan || []).map(hp => ({ kind: 'lan', url: `https://${hp}/`, host: hp, server }));
+  if (state.public) list.push({ kind: 'public', url: state.public.replace(/\/?$/, '/'), host: state.public.replace(/^https?:\/\//, ''), server });
+  return list;
+}
+
 function connectAddresses() {
-  if (!chat.ok) return [];
-  const list = (chat.lan || []).map(hp => ({ kind: 'lan', url: `https://${hp}/`, host: hp }));
-  if (chat.public) list.push({ kind: 'public', url: chat.public.replace(/\/?$/, '/'), host: chat.public.replace(/^https?:\/\//, '') });
+  const list = addressesOf(chat, 'Máy chủ 1');
+  // Máy chủ phụ trùng mã với máy chủ chính (cùng một máy, khác địa chỉ) thì không liệt kê lại
+  const seen = new Set(chat.ok && chat.id ? [chat.id] : []);
+  for (const s of serversView()) {
+    if (s.ok && s.serverId && seen.has(s.serverId)) continue;
+    if (s.ok && s.serverId) seen.add(s.serverId);
+    list.push(...addressesOf(s, s.name));
+  }
   // Link Internet lên đầu (thiết bị ở mạng nào cũng vào được), rồi Wi‑Fi/LAN thật, card mạng ảo (VMware, Hyper‑V…) cuối cùng
   const virt = new Set(lanAddresses().filter(a => a.virtual).map(a => a.ip));
   const rank = a => a.kind === 'public' ? 0 : virt.has(a.host.split(':')[0]) ? 2 : 1;
@@ -192,7 +221,10 @@ function connectAddresses() {
 }
 
 function info() {
-  return { title: config.title, ok: chat.ok, error: chat.ok ? null : chat.error, checkedAt: chat.at, id: chat.id || null, addresses: connectAddresses() };
+  const extras = serversView();
+  const ok = chat.ok || extras.some(s => s.ok);
+  return { title: config.title, ok, error: ok ? null : chat.error, checkedAt: chat.at, id: chat.id || null, addresses: connectAddresses(),
+    servers: [{ name: 'Máy chủ 1', ok: chat.ok }, ...extras.map(s => ({ name: s.name, ok: s.ok }))] };
 }
 
 // ---------- Kết nối thời gian thực (Server-Sent Events) ----------
@@ -217,7 +249,7 @@ function networkInfo() {
   return {
     hostname: os.hostname(), port: PORT, uptime: Math.round(process.uptime()), addresses: lanAddresses(), publicUrl: publicUrl(),
     devices: [...clients].map(c => ({ user: userOf(c)?.name || '—', username: userOf(c)?.username, ip: c.ip, device: c.device, since: c.since })),
-    lanchat: { url: config.lanchat.url, ...chat }, connect: connectAddresses(),
+    lanchat: { url: config.lanchat.url, ...chat }, servers: serversView(), connect: connectAddresses(),
   };
 }
 // Link mời dùng IP Wi‑Fi/LAN thật của máy này, để máy khác trong mạng mở được
@@ -293,6 +325,13 @@ async function route(req, res) {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   const me = currentUser(req);
+
+  // Trang GitHub (github.io) hỏi xem app có đang chạy thật không. Trang lỗi 1033 của Cloudflare không có header này,
+  // nên trình duyệt chặn và trang GitHub biết là máy chủ tắt, thay vì chuyển người dùng tới trang lỗi.
+  if (req.method === 'GET' && p === '/api/ping') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return json(res, { ok: true, app: 'ket-noi-may-chu-lan', title: config.title });
+  }
 
   // Chặn trang khác gửi yêu cầu thay người dùng (cookie đi kèm): chỉ nhận POST từ chính trang này
   if (req.method === 'POST') {
@@ -423,18 +462,52 @@ async function route(req, res) {
       return json(res, adminData());
     }
 
-    if (req.method === 'POST' && p === '/api/admin/config') {
-      const b = await readBody(req);
-      const u = normUrl(b.url);
+    // Hay nhập nhầm link của chính app này (link mời, link trycloudflare, cổng 3000) vào ô máy chủ LAN Chat
+    const badLanchatUrl = u => {
       let parsed;
-      try { parsed = new URL(u); } catch { return json(res, { error: 'Địa chỉ không hợp lệ' }, 400); }
-      // Hay nhập nhầm link của chính app này (link mời, link trycloudflare, cổng 3000) vào ô máy chủ LAN Chat
+      try { parsed = new URL(u); } catch { return 'Địa chỉ không hợp lệ'; }
       const own = new Set(['localhost', '127.0.0.1', ...lanAddresses().map(a => a.ip)]);
       const pub = publicUrl();
       if (parsed.searchParams.has('moi') || (pub && parsed.host === new URL(pub).host)
         || (own.has(parsed.hostname) && +(parsed.port || (parsed.protocol === 'https:' ? 443 : 80)) === PORT)) {
-        return json(res, { error: 'Đây là link của chính trang đăng ký này, không phải máy chủ LAN Chat. Cùng máy thì nhập http://localhost:8000, khác máy thì nhập IP:8443 (hoặc bấm Bắt đầu quét)' }, 400);
+        return 'Đây là link của chính trang đăng ký này, không phải máy chủ LAN Chat. Cùng máy thì nhập http://localhost:8000, khác máy thì nhập IP:8443 (hoặc bấm Bắt đầu quét)';
       }
+      return null;
+    };
+
+    // Thêm / xóa máy chủ LAN Chat phụ (máy chủ thứ hai, thứ ba…)
+    if (req.method === 'POST' && p === '/api/admin/servers') {
+      const b = await readBody(req);
+      const u = normUrl(b.url);
+      const bad = badLanchatUrl(u);
+      if (bad) return json(res, { error: bad }, 400);
+      if (u === normUrl(config.lanchat.url) || config.extraServers.some(s => normUrl(s.url) === u)) return json(res, { error: 'Máy chủ này đã có trong danh sách' }, 409);
+      if (config.extraServers.length >= 10) return json(res, { error: 'Tối đa 10 máy chủ phụ' }, 400);
+      const name = String(b.name || '').trim().replace(/\s+/g, ' ').slice(0, 40) || `Máy chủ ${config.extraServers.length + 2}`;
+      config.extraServers.push({ id: crypto.randomBytes(6).toString('hex'), name, url: u });
+      writeJson(CONFIG_FILE, config);
+      log(`${me.username}: thêm máy chủ "${name}" ${u}`);
+      await checkChat();
+      return json(res, adminData());
+    }
+    if (req.method === 'POST' && p === '/api/admin/servers/remove') {
+      const b = await readBody(req);
+      const s = config.extraServers.find(x => x.id === String(b.id));
+      if (!s) return json(res, { error: 'Không tìm thấy máy chủ' }, 404);
+      config.extraServers = config.extraServers.filter(x => x !== s);
+      delete extraState[s.id];
+      writeJson(CONFIG_FILE, config);
+      log(`${me.username}: xóa máy chủ "${s.name}"`);
+      pushInfo();
+      pushAdmin();
+      return json(res, adminData());
+    }
+
+    if (req.method === 'POST' && p === '/api/admin/config') {
+      const b = await readBody(req);
+      const u = normUrl(b.url);
+      const bad = badLanchatUrl(u);
+      if (bad) return json(res, { error: bad }, 400);
       const title = String(b.title || '').trim().slice(0, 60);
       config.lanchat.url = u;
       if (title) config.title = title;
