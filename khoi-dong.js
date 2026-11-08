@@ -21,6 +21,15 @@ const PY = process.env.PYTHON || 'python';
 const ENV = { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Chạy ngầm thì không có cửa sổ: ghi mọi dòng ra data/khoi-dong.log để xem bằng trang-thai.bat
+const LOG = path.join(ROOT, 'data', 'khoi-dong.log');
+try { if (fs.statSync(LOG).size > 2e6) fs.renameSync(LOG, LOG + '.cu'); } catch { }
+const origLog = console.log.bind(console);
+console.log = (...a) => {
+  try { origLog(...a); } catch { }
+  try { fs.appendFileSync(LOG, `${new Date().toLocaleString('vi-VN')}  ${a.join(' ')}\n`); } catch { }
+};
 const listening = port => new Promise(resolve => {
   const s = net.connect(port, '127.0.0.1');
   s.once('connect', () => { s.destroy(); resolve(true); });

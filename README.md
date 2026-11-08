@@ -16,9 +16,16 @@ khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu 
 
 ## Chạy máy chủ
 
-**Cách nhanh nhất:** bấm đúp **`khoi-dong.bat`**. Một cửa sổ chạy cả 4 phần: máy chủ LAN Chat, trang đăng ký,
-link Internet cho LAN Chat, link Internet cho trang đăng ký (tự cập nhật link GitHub cố định). Phần nào dừng bất ngờ
-thì tự bật lại. Máy chủ LAN Chat được tìm ở `..\Dự án 02\ui\ui\ui`; ở chỗ khác thì đặt `"lanchatDir"` trong `data/config.json`.
+**Cách nhanh nhất:** bấm đúp **`khoi-dong.bat`**. Hệ thống **chạy ngầm** (không có cửa sổ nào để lỡ tay đóng) gồm 4 phần:
+máy chủ LAN Chat, trang đăng ký, link Internet cho LAN Chat, link Internet cho trang đăng ký (tự cập nhật link GitHub
+cố định). Phần nào dừng bất ngờ thì tự bật lại. Máy chủ LAN Chat được tìm ở `..\Dự án 02\ui\ui\ui`; ở chỗ khác thì đặt
+`"lanchatDir"` trong `data/config.json`.
+
+| File | Dùng để |
+|---|---|
+| `khoi-dong.bat` | Bật máy chủ chạy ngầm (đã chạy thì không bật trùng). `khoi-dong.bat hien` để chạy có cửa sổ |
+| `trang-thai.bat` | Xem máy chủ có đang chạy không, link hiện tại, nhật ký gần nhất |
+| `tat-may-chu.bat` | Tắt toàn bộ máy chủ |
 
 **Để điện thoại nào (Wi‑Fi, 4G, 5G) bấm "Mở app" cũng vào được ngay:** máy chủ phải luôn chạy. Bấm đúp
 **`cai-tu-chay.bat`** một lần: máy chủ tự chạy mỗi khi bật máy và máy không ngủ khi cắm sạc. Gỡ: `go-tu-chay.bat`.
