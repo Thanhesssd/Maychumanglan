@@ -5,7 +5,7 @@ Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR
 
 ## 🔗 Link truy cập app
 
-**https://identifying-mills-natural-partially.trycloudflare.com**
+**https://medicare-conducting-critics-bugs.trycloudflare.com**
 
 Link cố định (không đổi, tự chuyển tới app):
 - **https://thanhesssd.github.io/Quanlymanglan/**
