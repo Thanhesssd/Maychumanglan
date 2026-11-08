@@ -5,7 +5,7 @@ Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR
 
 ## 🔗 Link truy cập app
 
-**https://medicare-conducting-critics-bugs.trycloudflare.com**
+**https://continue-aspect-challenge-heather.trycloudflare.com**
 
 Link cố định (không đổi, tự chuyển tới app):
 - **https://thanhesssd.github.io/Quanlymanglan/**
