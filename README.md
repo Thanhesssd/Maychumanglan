@@ -14,6 +14,13 @@ khi đó chủ máy chủ cập nhật link mới vào đây. GitHub chỉ lưu 
 
 ## Chạy máy chủ
 
+**Cách nhanh nhất:** bấm đúp **`khoi-dong.bat`**. File này mở 4 cửa sổ: máy chủ LAN Chat, trang đăng ký,
+link Internet cho LAN Chat, link Internet cho trang đăng ký (tự cập nhật link GitHub cố định). Máy chủ LAN Chat
+được tìm ở `..\Dự án 02\ui\ui\ui`; ở chỗ khác thì đặt `"lanchatDir"` trong `data/config.json`.
+Muốn tự chạy khi bật máy: nhấn Win+R, gõ `shell:startup`, rồi kéo lối tắt của `khoi-dong.bat` vào thư mục đó.
+
+Từng bước:
+
 1. Bấm đúp `chay-trang-dia-chi.bat` (hoặc `node server.js`). Cần Node.js 18 trở lên, không phải cài thư viện.
    Luôn mở qua `http://localhost:3000/`, không mở thẳng file HTML.
 2. Lần đầu: bấm đúp `tao-quan-tri.bat` để tạo tài khoản quản trị (hoặc đăng ký tại `http://localhost:3000/` trên máy chủ).

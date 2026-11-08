@@ -185,9 +185,10 @@ function connectAddresses() {
   if (!chat.ok) return [];
   const list = (chat.lan || []).map(hp => ({ kind: 'lan', url: `https://${hp}/`, host: hp }));
   if (chat.public) list.push({ kind: 'public', url: chat.public.replace(/\/?$/, '/'), host: chat.public.replace(/^https?:\/\//, '') });
-  // Ưu tiên địa chỉ Wi‑Fi/LAN thật, đưa card mạng ảo (VMware, Hyper‑V…) xuống cuối
+  // Link Internet lên đầu (thiết bị ở mạng nào cũng vào được), rồi Wi‑Fi/LAN thật, card mạng ảo (VMware, Hyper‑V…) cuối cùng
   const virt = new Set(lanAddresses().filter(a => a.virtual).map(a => a.ip));
-  return list.sort((a, b) => virt.has(a.host.split(':')[0]) - virt.has(b.host.split(':')[0]));
+  const rank = a => a.kind === 'public' ? 0 : virt.has(a.host.split(':')[0]) ? 2 : 1;
+  return list.sort((a, b) => rank(a) - rank(b));
 }
 
 function info() {
