@@ -203,14 +203,15 @@ let chat = { ok: false, at: 0, error: 'Chưa kiểm tra' };
 const extraState = {}; // id máy chủ phụ -> kết quả kiểm tra
 // Máy chủ đám mây không gọi được localhost:8000 của laptop. Máy chủ LAN Chat trên laptop tự ghi địa chỉ hiện tại
 // (link Internet) vào may-chu.json trên GitHub; đọc file đó để biết gọi vào đâu. Laptop tắt thì báo "chưa chạy".
+// Đã đặt LANCHAT_URL (vd: máy chủ LAN Chat cũng chạy trên đám mây) thì dùng thẳng, không cần đọc may-chu.json.
 const LANCHAT_DIRECTORY = process.env.LANCHAT_DIRECTORY
-  || (CLOUD ? 'https://thanhesssd.github.io/hethongungdungchatbaomat-kysopdf/ui/ui/ui/may-chu.json' : '');
+  || (CLOUD && !process.env.LANCHAT_URL ? 'https://thanhesssd.github.io/hethongungdungchatbaomat-kysopdf/ui/ui/ui/may-chu.json' : '');
 async function mainChatUrl() {
   if (!LANCHAT_DIRECTORY) return config.lanchat.url;
   try {
     const r = await fetch(LANCHAT_DIRECTORY + '?t=' + Date.now(), { signal: AbortSignal.timeout(8000) });
     const d = await r.json();
-    if (d.public) return d.public;
+    if (d.cloud || d.public) return d.cloud || d.public; // máy chủ đám mây (luôn bật) trước, laptop sau
   } catch { }
   return config.lanchat.url;
 }

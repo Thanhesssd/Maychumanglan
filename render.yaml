@@ -1,21 +1,47 @@
-# Cấu hình chạy trên Render.com (gói miễn phí). Render đọc file này khi bạn chọn "New > Blueprint".
-# Các biến có sync: false sẽ được Render hỏi lúc tạo; giá trị không nằm trong code hay trên GitHub.
+# Tạo CẢ HAI máy chủ trên Render.com (gói miễn phí) bằng một lần bấm "New Blueprint Instance":
+#   1. quanlymanglan-m23931716 : trang đăng ký, cấp quyền, cấp địa chỉ (repo này)
+#   2. lanchat-m23931716       : máy chủ LAN Chat (repo công khai hethongungdungchatbaomat-kysopdf)
+# Cả hai lưu dữ liệu vào cùng một project Supabase (tên khóa khác nhau, không đè nhau).
+# Biến có "sync: false" sẽ được Render hỏi lúc tạo; giá trị không nằm trong code hay trên GitHub.
 services:
   - type: web
-    name: quanlymanglan
+    name: quanlymanglan-m23931716
     runtime: node
     plan: free
+    region: singapore
     buildCommand: echo "Khong can cai thu vien"
     startCommand: node cloud.js
     healthCheckPath: /api/ping
     envVars:
-      - key: SUPABASE_URL          # Project URL trong Supabase (Settings > API)
+      - key: SUPABASE_URL          # Project URL trong Supabase (Project Settings > API)
         sync: false
-      - key: SUPABASE_SERVICE_KEY  # khóa service_role trong Supabase (Settings > API) — giữ bí mật
+      - key: SUPABASE_SERVICE_KEY  # khóa service_role trong Supabase — giữ bí mật
         sync: false
-      - key: ADMIN_USERNAME        # tên đăng nhập quản trị viên đầu tiên, vd: quantri
+      - key: ADMIN_USERNAME        # tên đăng nhập quản trị viên, vd: quantri
         sync: false
-      - key: ADMIN_PASSWORD        # mật khẩu quản trị viên đầu tiên (ít nhất 6 ký tự)
+      - key: ADMIN_PASSWORD        # mật khẩu quản trị viên (ít nhất 6 ký tự)
         sync: false
       - key: ADMIN_NAME
         value: Quản trị viên
+      # Địa chỉ máy chủ LAN Chat trên đám mây (dịch vụ thứ 2 bên dưới). Render đổi tên thì sửa lại ô này.
+      - key: LANCHAT_URL
+        value: https://lanchat-m23931716.onrender.com
+
+  - type: web
+    name: lanchat-m23931716
+    runtime: python
+    plan: free
+    region: singapore
+    repo: https://github.com/Thanhesssd/hethongungdungchatbaomat-kysopdf
+    branch: main
+    rootDir: ui/ui/ui
+    buildCommand: pip install cryptography
+    startCommand: python server.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: SUPABASE_URL          # cùng giá trị như ở trên
+        sync: false
+      - key: SUPABASE_SERVICE_KEY  # cùng giá trị như ở trên
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"
