@@ -5,7 +5,7 @@ Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR
 
 ## 🔗 Link truy cập app
 
-**https://provinces-erp-arg-utilities.trycloudflare.com**
+**https://around-things-incorporate-sleeps.trycloudflare.com**
 
 Link cố định (không đổi, tự chuyển tới app):
 - **https://thanhesssd.github.io/Quanlymanglan/**
