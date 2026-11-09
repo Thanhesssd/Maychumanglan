@@ -5,7 +5,7 @@ Trang web nhỏ chạy trong mạng LAN. Nó hiện **địa chỉ IP và mã QR
 
 ## 🔗 Link truy cập app
 
-**https://demonstrated-marco-controversial-injuries.trycloudflare.com**
+**https://obvious-novels-connection-spotlight.trycloudflare.com**
 
 Link cố định (không đổi, tự chuyển tới app):
 - **https://thanhesssd.github.io/Quanlymanglan/**
