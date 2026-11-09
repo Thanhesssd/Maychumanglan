@@ -79,6 +79,26 @@ Máy khác cùng Wi‑Fi không vào được thì chạy `mo-cong-mang.bat` m�
 Mặc định trang tìm máy chủ LAN Chat ở `http://localhost:8000` (cùng máy). Nếu máy chủ LAN Chat chạy ở máy khác,
 vào trang quản lý, bấm **Bắt đầu quét** hoặc nhập `IP:8443`.
 
+## 🐙 Chạy hoàn toàn trên GitHub (tắt laptop vẫn đăng nhập, cấp quyền được)
+
+Trang **https://m23931716-coder.github.io/Quanlymanglan/** chạy trên GitHub Pages. Người dùng bấm
+**Đăng nhập bằng GitHub**; tài khoản và quyền lưu ở **Supabase** (đăng nhập Supabase cũng bằng GitHub).
+Quản trị viên là tài khoản GitHub `m23931716-coder` (sửa ở dòng `admin_github` trong `docs/cai-dat-supabase.sql`).
+Chưa cài xong thì trang tự dùng máy chủ trên laptop như trước (`docs/laptop.html`).
+
+1. **Supabase:** https://supabase.com → *Continue with GitHub* → *New project* (vùng Singapore).
+   Vào *SQL Editor*, dán toàn bộ file `docs/cai-dat-supabase.sql`, bấm *Run*.
+2. **Ứng dụng GitHub để đăng nhập:** GitHub → *Settings → Developer settings → OAuth Apps → New OAuth App*:
+   - Homepage URL: `https://m23931716-coder.github.io/Quanlymanglan/`
+   - Authorization callback URL: `https://<mã-project>.supabase.co/auth/v1/callback` (chép ở Supabase > Authentication > Providers > GitHub)
+   Tạo xong, chép **Client ID** và bấm *Generate a new client secret*.
+3. **Supabase > Authentication > Providers > GitHub:** bật, dán Client ID và Client secret, *Save*.
+   **Authentication > URL Configuration:** Site URL = `https://m23931716-coder.github.io/Quanlymanglan/`, thêm cùng địa chỉ vào *Redirect URLs*.
+4. **Project Settings → API:** chép **Project URL** và khóa **anon public**, điền vào `docs/cau-hinh.js`
+   (khóa anon là khóa công khai; **không** dán khóa service_role).
+
+Máy chủ LAN Chat vẫn chạy trên laptop: tắt laptop thì vẫn đăng nhập, cấp quyền được, còn phần chat báo "đang tắt".
+
 ## ☁️ Chạy trên máy chủ đám mây (tắt laptop vẫn dùng được)
 
 Một lần bấm trên **Render.com** tạo **cả hai máy chủ** chạy 24/7, không phụ thuộc laptop:

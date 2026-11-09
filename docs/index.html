@@ -4,97 +4,274 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kết nối máy chủ LAN</title>
-<meta name="description" content="Đăng ký, đăng nhập để nhận địa chỉ IP kết nối máy chủ LAN Chat.">
+<meta name="description" content="Đăng nhập bằng GitHub để nhận địa chỉ kết nối máy chủ LAN Chat. Chạy trên GitHub, không phụ thuộc laptop.">
 <style>
-  :root { --bg: #f6f3ef; --panel: #fff; --text: #24201c; --muted: #7a7067; --border: #e6ded5; --primary: #8a4b22; --on-primary: #fff; --bad: #b91c1c; --ok: #15803d; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #15120f; --panel: #1f1a16; --text: #f1ebe4; --muted: #a89c90; --border: #3a322b; --primary: #d08a4f; --on-primary: #1b120b; --bad: #f87171; --ok: #4ade80; } }
+  :root { --bg: #f6f3ef; --panel: #fff; --panel-2: #faf7f3; --text: #24201c; --muted: #7a7067; --border: #e6ded5;
+    --primary: #8a4b22; --on-primary: #fff; --bad: #b91c1c; --bad-bg: #fdecec; --ok: #15803d; --ok-bg: #e8f6ed; --warn: #b45309; --warn-bg: #fdf3e2; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15120f; --panel: #1f1a16; --panel-2: #26201b; --text: #f1ebe4; --muted: #a89c90; --border: #3a322b;
+    --primary: #d08a4f; --on-primary: #1b120b; --bad: #f87171; --bad-bg: #3a1616; --ok: #4ade80; --ok-bg: #14301f; --warn: #fbbf24; --warn-bg: #362a10; } }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px 24px; text-align: center; box-shadow: 0 4px 16px rgba(40, 25, 10, .08); }
-  h1 { font-size: 24px; margin: 8px 0; }
-  .icon { font-size: 44px; }
-  .btn[hidden] { display: none; }
-  .btn { display: inline-block; margin-top: 16px; padding: 12px 22px; border-radius: 12px; background: var(--primary); color: var(--on-primary); font-weight: 700; text-decoration: none; }
-  .muted { color: var(--muted); font-size: 14px; }
-  .link { font-family: ui-monospace, Consolas, monospace; font-size: 13px; word-break: break-all; color: var(--muted); }
-  .err { color: var(--bad); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .bar b { margin-right: auto; font-size: 16px; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+  .center { max-width: 440px; margin: 10vh auto 0; text-align: center; }
+  h1 { font-size: 22px; margin: 6px 0; } h2 { font-size: 17px; margin: 0 0 10px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 10px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .btn.dark { background: #24292f; border-color: #24292f; color: #fff; font-size: 16px; padding: 12px 18px; }
+  .btn.sm { padding: 5px 10px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+  .grow { flex: 1; min-width: 180px; }
+  .list { display: grid; gap: 8px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .s-pending { background: var(--warn-bg); color: var(--warn); } .s-approved { background: var(--ok-bg); color: var(--ok); } .s-blocked { background: var(--bad-bg); color: var(--bad); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; }
+  .mono { font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+  .in { padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel-2); color: var(--text); font: inherit; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--bad); }
+  .hidden { display: none !important; }
+  .toast { position: fixed; right: 16px; bottom: 16px; background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 10px; padding: 10px 14px; max-width: 340px; }
 </style>
 </head>
 <body>
-<main>
-  <div class="icon">🌐</div>
-  <h1>Kết nối máy chủ LAN</h1>
-  <p class="muted" id="msg">Đang tìm địa chỉ app…</p>
-  <a class="btn" id="go" href="#" hidden>Mở app</a>
-  <a class="btn" id="start" href="maychulan://start" hidden>⚡ Mở app (bật máy chủ)</a>
-  <button class="btn" id="retry" type="button" hidden style="border:0;cursor:pointer;font:inherit;background:transparent;color:var(--primary);border:1px solid var(--border)">🔄 Thử lại ngay</button>
-  <p class="muted" id="startNote" hidden style="font-size:13px">Nút <b>Mở app</b> tự chạy chương trình bật máy chủ khi bấm <b>trên chính máy chủ</b>
-    (đã cài một lần bằng <b>cai-nut-mo-app.bat</b>). Trình duyệt hỏi “Mở Khởi động máy chủ LAN?” thì bấm <b>Mở</b>.
-    Người dùng ở máy khác: chờ quản trị viên bật máy chủ, trang này tự vào app.</p>
-  <p class="link" id="link"></p>
-  <p class="muted">Đăng ký hoặc đăng nhập, chờ quản trị viên cấp quyền để nhận địa chỉ IP máy chủ LAN Chat.</p>
-</main>
-<script>
-// Link app (đường hầm Cloudflare) đổi mỗi lần máy chủ bật lại; máy chủ tự cập nhật file link.txt này.
-// Máy chủ tắt thì trang tự thử lại mỗi 15 giây và tự nhận link mới khi máy chủ bật lại, không cần tải lại trang.
-const $ = id => document.getElementById(id);
-const msg = $('msg'), go = $('go'), retry = $('retry'), start = $('start'), startNote = $('startNote');
-let timer = null, starting = false;
+<div class="bar hidden" id="bar">
+  <b id="title">Kết nối máy chủ LAN</b>
+  <img class="avatar" id="meAvatar" alt="">
+  <span class="small"><b id="meName"></b></span>
+  <button class="btn sm" id="btnOut">Đăng xuất</button>
+</div>
 
-// Bấm "Mở app" khi máy chủ tắt: trình duyệt mở link maychulan:// (chạy khoi-dong.bat trên máy chủ),
-// trang kiểm tra lại mỗi 5 giây trong 3 phút, máy chủ lên là tự vào app.
-start.onclick = () => {
-  starting = true;
-  msg.textContent = 'Đang bật máy chủ… Nếu trình duyệt hỏi “Mở Khởi động máy chủ LAN?”, hãy bấm Mở.';
-  setTimeout(() => { starting = false; }, 180000);
-  setTimeout(check, 5000);
+<!-- Chưa đăng nhập -->
+<section class="card center hidden" id="vLogin">
+  <div style="font-size:44px">🌐</div>
+  <h1>Kết nối máy chủ LAN</h1>
+  <p class="muted">Đăng nhập bằng tài khoản GitHub để nhận địa chỉ kết nối máy chủ LAN Chat.
+    Tài khoản mới cần quản trị viên cấp quyền.</p>
+  <button class="btn dark" id="btnGithub">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    Đăng nhập bằng GitHub</button>
+  <p class="small muted" id="loginErr"></p>
+</section>
+
+<!-- Chờ cấp quyền / bị chặn -->
+<section class="card center hidden" id="vPending">
+  <div style="font-size:44px">⏳</div>
+  <h1>Đang chờ cấp quyền</h1>
+  <p class="muted">Tài khoản GitHub <b id="pendingName"></b> đã đăng ký. Quản trị viên cần bấm <b>Cấp quyền</b>
+    thì bạn mới xem được địa chỉ máy chủ. Giữ trang này mở, trang tự cập nhật.</p>
+</section>
+<section class="card center hidden" id="vBlocked">
+  <div style="font-size:44px">⛔</div>
+  <h1>Tài khoản đã bị chặn</h1>
+  <p class="muted">Liên hệ quản trị viên nếu đây là nhầm lẫn.</p>
+</section>
+
+<!-- Đã được cấp quyền -->
+<main class="wrap hidden" id="vMain">
+  <section class="card" style="border:2px solid var(--ok)">
+    <h2>💬 LAN Chat</h2>
+    <p class="small" id="chatStatus"><span class="dot"></span> Đang kiểm tra máy chủ…</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn primary" id="btnChat" target="_blank" rel="noopener">💬 Mở LAN Chat (tự kết nối)</a>
+      <button class="btn" id="btnCopyChat">🔗 Sao chép link máy chủ</button>
+    </div>
+    <p class="small muted" style="margin-bottom:0">App tự đọc địa chỉ máy chủ đang chạy và kết nối, dùng được qua Wi‑Fi, 4G, 5G.
+      Lần đầu mở app chat cần đăng ký tài khoản LAN Chat.</p>
+    <div class="list" id="chatAddrs" style="margin-top:10px"></div>
+  </section>
+  <section class="card hidden" id="cServers">
+    <h2>🖥️ Máy chủ khác</h2>
+    <div class="list" id="servers"></div>
+  </section>
+
+  <!-- Quản trị -->
+  <section class="card hidden" id="cAdmin">
+    <h2>👑 Quản trị: cấp quyền</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn sm" data-f="pending">Chờ cấp quyền</button>
+      <button class="btn sm" data-f="approved">Đã cấp quyền</button>
+      <button class="btn sm" data-f="blocked">Bị chặn</button>
+      <button class="btn sm" data-f="">Tất cả</button>
+      <button class="btn sm primary" id="btnApproveAll">✅ Cấp quyền tất cả đang chờ</button>
+    </div>
+    <div class="list" id="users"></div>
+  </section>
+  <section class="card hidden" id="cSettings">
+    <h2>⚙️ Cài đặt</h2>
+    <div class="list">
+      <label class="row"><span class="grow">Tiêu đề trang</span><input class="in" id="sTitle" maxlength="60"></label>
+      <label class="row"><span class="grow">Tự động cấp quyền cho người đăng nhập mới</span>
+        <select class="in" id="sAuto"><option value="off">Tắt (duyệt từng người)</option><option value="all">Bật (ai đăng nhập cũng được)</option></select></label>
+      <div class="row" style="display:block">
+        <b>Máy chủ khác</b> <span class="small muted">(người được cấp quyền thấy danh sách này)</span>
+        <div class="list" id="srvEdit" style="margin:8px 0"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input class="in" id="nName" placeholder="Tên, vd: Máy chủ 2" style="flex:1;min-width:140px">
+          <input class="in" id="nUrl" placeholder="https://… hoặc IP:8443" style="flex:2;min-width:200px">
+          <button class="btn sm" id="btnAddSrv">➕ Thêm</button>
+        </div>
+      </div>
+      <button class="btn primary" id="btnSave">Lưu cài đặt</button>
+    </div>
+  </section>
+</main>
+<div class="toast hidden" id="toast"></div>
+
+<script src="cau-hinh.js"></script>
+<script>
+// Chưa cấu hình Supabase: dùng tạm trang dẫn tới máy chủ trên laptop như trước
+if (!window.CAU_HINH?.SUPABASE_URL || !window.CAU_HINH?.SUPABASE_ANON_KEY) location.replace('laptop.html' + location.search);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const C = window.CAU_HINH;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dt = t => t ? new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—';
+const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+let me = null, settings = null, users = [], filter = 'pending', chatUrl = '';
+const STATUS = { pending: 'Chờ cấp quyền', approved: 'Đã cấp quyền', blocked: 'Bị chặn' };
+
+function toast(text) { const t = $('toast'); t.textContent = text; t.classList.remove('hidden'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hidden'), 4000); }
+function show(v) { for (const id of ['vLogin', 'vPending', 'vBlocked', 'vMain']) $(id).classList.toggle('hidden', id !== v); $('bar').classList.toggle('hidden', v === 'vLogin'); }
+
+$('btnGithub').onclick = async () => {
+  // Về lại đúng trang này sau khi GitHub xác nhận (giữ cả ?moi=… nếu có)
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'github', options: { redirectTo: location.origin + location.pathname } });
+  if (error) $('loginErr').textContent = 'Không đăng nhập được: ' + error.message;
+};
+$('btnOut').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+async function load() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return show('vLogin');
+  const { data: p, error } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if (error || !p) { show('vLogin'); $('loginErr').textContent = 'Chưa tạo được hồ sơ: ' + (error?.message || 'thử đăng nhập lại'); return; }
+  const was = me?.status;
+  me = p;
+  sb.rpc('touch').then(() => {}, () => {});
+  $('meName').textContent = me.name || me.github;
+  $('meAvatar').src = me.avatar || '';
+  if (me.status === 'blocked') return show('vBlocked');
+  if (me.status !== 'approved') { $('pendingName').textContent = me.github; return show('vPending'); }
+  if (was && was !== 'approved') toast('🎉 Bạn đã được cấp quyền');
+  show('vMain');
+  const s = await sb.from('settings').select('*').eq('id', 1).single();
+  settings = s.data || { title: 'Kết nối máy chủ LAN', servers: [], auto_approve: 'off' };
+  document.title = $('title').textContent = settings.title;
+  renderServers();
+  loadChat();
+  const admin = me.role === 'admin';
+  $('cAdmin').classList.toggle('hidden', !admin);
+  $('cSettings').classList.toggle('hidden', !admin);
+  if (admin) { await loadUsers(); fillSettings(); }
+}
+
+// Máy chủ LAN Chat: đọc địa chỉ hiện tại mà máy chủ tự ghi lên GitHub (may-chu.json)
+async function loadChat() {
+  $('btnChat').href = C.CHAT_WEB;
+  let dir = null;
+  try { dir = await (await fetch(C.LANCHAT_DIRECTORY + '?t=' + Date.now(), { cache: 'no-store' })).json(); } catch { }
+  chatUrl = dir?.cloud || dir?.public || '';
+  const lan = (dir?.lan || []).filter(h => !/^192\.168\.(56|156|205)\./.test(h));
+  $('chatAddrs').innerHTML = [
+    chatUrl ? `<div class="row"><span class="grow"><b>Internet</b><br><span class="mono small">${esc(chatUrl)}</span></span></div>` : '',
+    lan.length ? `<div class="row"><span class="grow"><b>Mạng LAN (cùng Wi‑Fi)</b><br><span class="mono small">${lan.map(esc).join(', ')}</span></span></div>` : '',
+  ].join('');
+  // Thử kết nối: lỗi mạng/DNS là máy chủ đang tắt
+  let up = false;
+  if (chatUrl) try { await fetch(chatUrl + '/api/health', { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(10000) }); up = true; } catch { }
+  $('chatStatus').innerHTML = up
+    ? '<span class="dot on"></span> Máy chủ LAN Chat <b>đang chạy</b>'
+    : '<span class="dot off"></span> Máy chủ LAN Chat <b>đang tắt</b>. App chat tự kết nối lại khi máy chủ bật.';
+}
+$('btnCopyChat').onclick = async () => { if (!chatUrl) return toast('Chưa có link máy chủ'); try { await navigator.clipboard.writeText(chatUrl); toast('Đã sao chép ' + chatUrl); } catch { toast(chatUrl); } };
+
+function renderServers() {
+  const list = settings.servers || [];
+  $('cServers').classList.toggle('hidden', !list.length);
+  $('servers').innerHTML = list.map(s => `<div class="row"><span class="grow"><b>${esc(s.name)}</b><br><span class="mono small">${esc(s.url)}</span></span>
+    <a class="btn sm" href="${esc(/^https?:/.test(s.url) ? s.url : 'https://' + s.url)}" target="_blank" rel="noopener">Mở</a></div>`).join('');
+}
+
+// ---------- Quản trị ----------
+async function loadUsers() {
+  const { data } = await sb.from('profiles').select('*').order('created_at', { ascending: false });
+  users = data || [];
+  renderUsers();
+}
+function renderUsers() {
+  document.querySelectorAll('[data-f]').forEach(b => {
+    const n = b.dataset.f ? users.filter(u => u.status === b.dataset.f).length : users.length;
+    b.textContent = b.textContent.replace(/ \(\d+\)$/, '') + ` (${n})`;
+    b.classList.toggle('primary', b.dataset.f === filter);
+  });
+  const list = users.filter(u => !filter || u.status === filter);
+  $('users').innerHTML = list.map(u => {
+    const self = u.id === me.id, acts = [];
+    if (!self) {
+      if (u.status !== 'approved') acts.push(['approve', '✅ Cấp quyền', 'primary']);
+      if (u.status === 'approved') acts.push(['revoke', 'Thu hồi', '']);
+      if (u.status !== 'blocked') acts.push(['block', 'Chặn', '']);
+      acts.push(u.role === 'admin' ? ['user', 'Bỏ quản trị', ''] : ['admin', 'Làm quản trị', '']);
+    }
+    return `<div class="row"><img class="avatar" src="${esc(u.avatar || '')}" alt="">
+      <span class="grow"><b>${esc(u.name || u.github)}</b> ${u.role === 'admin' ? '<span class="badge s-approved">Quản trị</span>' : ''}<br>
+      <span class="small muted">@${esc(u.github)} · đăng ký ${dt(u.created_at)} · lần cuối ${dt(u.last_seen)}</span></span>
+      <span class="badge s-${u.status}">${STATUS[u.status]}</span>
+      ${self ? '<span class="small muted">Bạn</span>' : acts.map(([a, t, c]) => `<button class="btn sm ${c}" data-act="${a}" data-id="${u.id}">${t}</button>`).join('')}</div>`;
+  }).join('') || '<p class="muted small">Không có tài khoản.</p>';
+}
+document.addEventListener('click', async e => {
+  const f = e.target.closest('[data-f]');
+  if (f) { filter = f.dataset.f; return renderUsers(); }
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const change = { approve: { status: 'approved', approved_by: me.github, approved_at: new Date().toISOString() },
+    revoke: { status: 'pending' }, block: { status: 'blocked' }, admin: { role: 'admin', status: 'approved' }, user: { role: 'user' } }[b.dataset.act];
+  if (b.dataset.act === 'admin' && !confirm('Cho người này quyền quản trị (cấp quyền, chặn người khác)?')) return;
+  b.disabled = true;
+  const { error } = await sb.from('profiles').update(change).eq('id', b.dataset.id);
+  if (error) { toast('Không thực hiện được: ' + error.message); b.disabled = false; return; }
+  toast('Đã cập nhật'); loadUsers();
+});
+$('btnApproveAll').onclick = async () => {
+  const n = users.filter(u => u.status === 'pending').length;
+  if (!n || !confirm(`Cấp quyền cho cả ${n} tài khoản đang chờ?`)) return;
+  const { error } = await sb.from('profiles').update({ status: 'approved', approved_by: me.github, approved_at: new Date().toISOString() }).eq('status', 'pending');
+  toast(error ? 'Lỗi: ' + error.message : `✅ Đã cấp quyền ${n} tài khoản`); loadUsers();
 };
 
-async function check() {
-  clearInterval(timer);
-  retry.hidden = true; go.hidden = true; start.hidden = true; startNote.hidden = true;
-  msg.textContent = 'Đang kiểm tra máy chủ…';
-  try {
-    // link.txt: mỗi dòng một địa chỉ app, thử lần lượt. Dòng đầu là máy chủ đám mây (chạy cả khi tắt laptop),
-    // dòng sau là đường hầm từ laptop (dự phòng).
-    const r = await fetch('link.txt?t=' + Date.now(), { cache: 'no-store' });
-    const urls = (await r.text()).split(/\s+/).map(s => s.trim().replace(/\/+$/, '')).filter(s => /^https:\/\/[a-z0-9.-]+$/.test(s));
-    if (!urls.length) throw new Error('Chưa có link');
-    let url = null;
-    for (const u of urls) {
-      // Chỉ chính app mới trả lời /api/ping kèm quyền đọc chéo trang; trang lỗi 1033 hay lỗi DNS đều bị coi là tắt
-      const cloud = !/\.trycloudflare\.com$/.test(u);
-      $('link').textContent = u;
-      if (cloud) msg.textContent = 'Đang đánh thức máy chủ… (lần đầu sau lúc vắng người có thể mất tới 1 phút)';
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), cloud ? 75000 : 10000);
-      let ok = false;
-      try { ok = !!(await (await fetch(u + '/api/ping', { cache: 'no-store', signal: ctl.signal })).json()).ok; }
-      catch { } finally { clearTimeout(t); }
-      if (ok) { url = u; break; }
-    }
-    if (!url) throw new Error('Máy chủ không trả lời');
-    $('link').textContent = url;
-    const target = url + '/' + location.search; // giữ ?moi=… của link mời
-    go.href = target; go.hidden = false;
-    msg.textContent = 'Máy chủ đang chạy. Đang chuyển tới app…';
-    setTimeout(() => location.replace(target), 800);
-  } catch (e) {
-    let left = starting ? 5 : 15;
-    const tick = () => {
-      msg.innerHTML = starting
-        ? `⏳ Đang chờ máy chủ khởi động (khoảng 30–60 giây)… Kiểm tra lại sau <b>${left}</b> giây.`
-        : '<span class="err">Máy chủ đang tắt hoặc chưa bật link Internet.</span><br>'
-          + `Tự thử lại sau <b>${left}</b> giây.`;
-      if (left-- <= 0) check();
-    };
-    retry.hidden = false; start.hidden = false; startNote.hidden = false;
-    tick();
-    timer = setInterval(tick, 1000);
-  }
+let draftServers = [];
+function fillSettings() {
+  $('sTitle').value = settings.title; $('sAuto').value = settings.auto_approve;
+  draftServers = [...(settings.servers || [])]; renderSrvEdit();
 }
-retry.onclick = check;
-check();
+function renderSrvEdit() {
+  $('srvEdit').innerHTML = draftServers.map((s, i) => `<div class="row"><span class="grow"><b>${esc(s.name)}</b> <span class="mono small">${esc(s.url)}</span></span>
+    <button class="btn sm" data-rm="${i}">Xóa</button></div>`).join('') || '<span class="small muted">Chưa có.</span>';
+}
+$('srvEdit').onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { draftServers.splice(+b.dataset.rm, 1); renderSrvEdit(); } };
+$('btnAddSrv').onclick = () => {
+  const name = $('nName').value.trim() || `Máy chủ ${draftServers.length + 2}`, url = $('nUrl').value.trim();
+  if (!url) return toast('Nhập địa chỉ máy chủ');
+  draftServers.push({ name, url }); $('nName').value = $('nUrl').value = ''; renderSrvEdit();
+};
+$('btnSave').onclick = async () => {
+  const { error } = await sb.from('settings').update({ title: $('sTitle').value.trim() || 'Kết nối máy chủ LAN', auto_approve: $('sAuto').value, servers: draftServers }).eq('id', 1);
+  toast(error ? 'Không lưu được: ' + error.message : '✅ Đã lưu cài đặt'); if (!error) load();
+};
+
+sb.auth.onAuthStateChange(() => load());
+load();
+// Tự cập nhật: người chờ thấy ngay khi được cấp quyền, quản trị viên thấy người mới đăng ký
+setInterval(() => { if (!document.hidden) load(); }, 15000);
 </script>
 </body>
 </html>
