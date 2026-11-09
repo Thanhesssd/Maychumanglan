@@ -4,8 +4,8 @@
 // TUYỆT ĐỐI không dán khóa "service_role" vào đây.
 // Còn để trống thì trang dùng tạm máy chủ trên laptop như trước.
 window.CAU_HINH = {
-  SUPABASE_URL: '',
-  SUPABASE_ANON_KEY: '',
+  SUPABASE_URL: 'https://sqneggastdqdboumkrun.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_s5tQTmY29VONWnsAqlaF7w_aNcsUjAu',
   // Máy chủ LAN Chat tự ghi địa chỉ hiện tại vào file này (xem repo hethongungdungchatbaomat-kysopdf)
   LANCHAT_DIRECTORY: 'https://thanhesssd.github.io/hethongungdungchatbaomat-kysopdf/ui/ui/ui/may-chu.json',
   // App LAN Chat bản GitHub: tự đọc địa chỉ máy chủ và kết nối
