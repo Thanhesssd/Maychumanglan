@@ -1,0 +1,13 @@
+{
+  "name": "quanlymanglan",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trang đăng ký, cấp quyền và cấp địa chỉ máy chủ LAN Chat",
+  "main": "server.js",
+  "scripts": {
+    "start": "node cloud.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

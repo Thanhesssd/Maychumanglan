@@ -1,0 +1,21 @@
+# Cấu hình chạy trên Render.com (gói miễn phí). Render đọc file này khi bạn chọn "New > Blueprint".
+# Các biến có sync: false sẽ được Render hỏi lúc tạo; giá trị không nằm trong code hay trên GitHub.
+services:
+  - type: web
+    name: quanlymanglan
+    runtime: node
+    plan: free
+    buildCommand: echo "Khong can cai thu vien"
+    startCommand: node cloud.js
+    healthCheckPath: /api/ping
+    envVars:
+      - key: SUPABASE_URL          # Project URL trong Supabase (Settings > API)
+        sync: false
+      - key: SUPABASE_SERVICE_KEY  # khóa service_role trong Supabase (Settings > API) — giữ bí mật
+        sync: false
+      - key: ADMIN_USERNAME        # tên đăng nhập quản trị viên đầu tiên, vd: quantri
+        sync: false
+      - key: ADMIN_PASSWORD        # mật khẩu quản trị viên đầu tiên (ít nhất 6 ký tự)
+        sync: false
+      - key: ADMIN_NAME
+        value: Quản trị viên

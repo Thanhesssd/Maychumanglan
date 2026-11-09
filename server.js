@@ -26,7 +26,11 @@ function writeJson(file, data) {
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
   fs.renameSync(tmp, file);
+  cloudStore.push(file); // trên máy chủ đám mây: gửi bản mới lên Supabase; trên laptop: không làm gì
 }
+const cloudStore = require('./cloud-store');
+// Chạy trên máy chủ đám mây (Render tự đặt biến RENDER): mọi khách đều tới từ Internet qua proxy
+const CLOUD = !!process.env.RENDER || process.env.CLOUD === '1';
 function log(line) {
   console.log(line);
   try { fs.appendFileSync(path.join(DATA, 'server.log'), `${new Date().toLocaleString('vi-VN')}  ${line}\n`); } catch { }
@@ -109,7 +113,7 @@ function startSession(res, u) {
   const token = crypto.randomBytes(24).toString('hex');
   sessions.set(tokenKey(token), { uid: u.id, exp: Date.now() + SESSION_DAYS * 864e5 });
   saveSessions();
-  res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}`);
+  res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 86400}${CLOUD ? '; Secure' : ''}`);
 }
 
 function endSessions(uid) {
@@ -149,10 +153,12 @@ function deviceName(ua = '') {
 }
 const socketIp = req => (req.socket.remoteAddress || '').replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1');
 // Qua đường hầm Cloudflare mọi kết nối đều đến từ 127.0.0.1; địa chỉ thật của khách nằm trong header CF-Connecting-IP
-const viaTunnel = req => socketIp(req) === '127.0.0.1' && !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);
+// Trên máy chủ đám mây, mọi kết nối đều qua proxy của nhà cung cấp: coi như khách từ Internet,
+// không ai được coi là "trên chính máy chủ" hay "cùng Wi‑Fi".
+const viaTunnel = req => CLOUD || (socketIp(req) === '127.0.0.1' && !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']));
 // Máy cùng Wi‑Fi/LAN: kết nối thẳng (không qua đường hầm Internet) từ địa chỉ nội bộ. Dựa vào địa chỉ TCP, không tin header.
 const sameLan = req => !viaTunnel(req) && /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(socketIp(req));
-const clientIp = req => viaTunnel(req) ? String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']).split(',')[0].trim() : socketIp(req);
+const clientIp = req => viaTunnel(req) ? (String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim() || socketIp(req)) : socketIp(req);
 // Yêu cầu đến từ chính máy chủ (localhost hoặc IP của máy này), không phải khách đi qua đường hầm Internet
 const onServer = req => { if (viaTunnel(req)) return false; const ip = socketIp(req); return ip === '127.0.0.1' || lanAddresses().some(a => a.ip === ip); };
 
@@ -195,8 +201,21 @@ async function checkOne(url) {
 // Máy chủ chính (config.lanchat) và các máy chủ phụ (config.extraServers: máy chủ thứ hai, thứ ba…)
 let chat = { ok: false, at: 0, error: 'Chưa kiểm tra' };
 const extraState = {}; // id máy chủ phụ -> kết quả kiểm tra
+// Máy chủ đám mây không gọi được localhost:8000 của laptop. Máy chủ LAN Chat trên laptop tự ghi địa chỉ hiện tại
+// (link Internet) vào may-chu.json trên GitHub; đọc file đó để biết gọi vào đâu. Laptop tắt thì báo "chưa chạy".
+const LANCHAT_DIRECTORY = process.env.LANCHAT_DIRECTORY
+  || (CLOUD ? 'https://thanhesssd.github.io/hethongungdungchatbaomat-kysopdf/ui/ui/ui/may-chu.json' : '');
+async function mainChatUrl() {
+  if (!LANCHAT_DIRECTORY) return config.lanchat.url;
+  try {
+    const r = await fetch(LANCHAT_DIRECTORY + '?t=' + Date.now(), { signal: AbortSignal.timeout(8000) });
+    const d = await r.json();
+    if (d.public) return d.public;
+  } catch { }
+  return config.lanchat.url;
+}
 async function checkChat() {
-  const [main, ...extras] = await Promise.all([checkOne(config.lanchat.url), ...config.extraServers.map(s => checkOne(s.url))]);
+  const [main, ...extras] = await Promise.all([mainChatUrl().then(checkOne), ...config.extraServers.map(s => checkOne(s.url))]);
   chat = main;
   config.extraServers.forEach((s, i) => { extraState[s.id] = extras[i]; });
   pushInfo();
@@ -293,6 +312,8 @@ function networkInfo() {
 // Link Internet do chia-se-internet.bat ghi ra (đường hầm Cloudflare), nếu đang bật
 const PUBLIC_URL_FILE = path.join(DATA, 'public_url.txt');
 function publicUrl() {
+  // Máy chủ đám mây có địa chỉ cố định (Render đặt sẵn RENDER_EXTERNAL_URL)
+  if (CLOUD) return (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '') || null;
   try { return fs.readFileSync(PUBLIC_URL_FILE, 'utf8').trim().replace(/\/+$/, '') || null; } catch { return null; }
 }
 function inviteUrl(token) {
@@ -654,8 +675,22 @@ server.on('error', e => {
   log(e.code === 'EADDRINUSE' ? `Cổng ${PORT} đang được dùng: có thể app đã chạy ở cửa sổ khác.` : e.message);
   process.exit(1);
 });
+// Máy chủ đám mây không có "localhost" để tạo quản trị viên đầu tiên: tạo từ biến môi trường
+// ADMIN_USERNAME / ADMIN_PASSWORD (đặt trong trang cài đặt của Render, không ghi vào code).
+if (!hasAdmin() && process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
+  const username = normUsername(process.env.ADMIN_USERNAME);
+  if (/^[a-z0-9._-]{3,32}$/.test(username) && process.env.ADMIN_PASSWORD.length >= 6) {
+    let u = findUser(username);
+    if (!u) { u = { id: ++db.seq, username, name: process.env.ADMIN_NAME || username, createdAt: Date.now() }; db.users.push(u); }
+    setPassword(u, process.env.ADMIN_PASSWORD);
+    Object.assign(u, { role: 'admin', status: 'approved', approvedBy: 'Tự động (biến môi trường)', approvedAt: Date.now() });
+    saveUsers();
+    log(`Đã tạo quản trị viên "${username}" từ biến môi trường.`);
+  } else log('⚠ ADMIN_USERNAME cần 3–32 ký tự (chữ, số, . _ -) và ADMIN_PASSWORD ít nhất 6 ký tự.');
+}
+
 server.listen(PORT, '0.0.0.0', () => {
-  log(`${config.title} đang chạy:`);
+  log(`${config.title} đang chạy${CLOUD ? ' trên máy chủ đám mây: ' + (publicUrl() || '') : ''}:`);
   log(`  Trên máy này:  http://localhost:${PORT}/   ·   quản trị: http://localhost:${PORT}/quan-ly`);
   for (const a of lanAddresses()) log(`  ${a.virtual ? 'Card mạng ảo' : 'Mạng LAN'} (${a.iface}): http://${a.ip}:${PORT}/`);
   if (!hasAdmin()) log(`  Chưa có quản trị viên. Mở http://localhost:${PORT}/ trên máy này và đăng ký: tài khoản đầu tiên là quản trị viên`);

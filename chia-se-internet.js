@@ -31,7 +31,10 @@ function publishToGitHub(url) {
   try {
     git('rev-parse', '--is-inside-work-tree');
     fs.mkdirSync(path.join(__dirname, 'docs'), { recursive: true });
-    fs.writeFileSync(path.join(__dirname, 'docs', 'link.txt'), url + '\n');
+    // Có máy chủ đám mây (mục "cloudUrl" trong data/config.json) thì giữ nó ở dòng đầu, đường hầm laptop làm dự phòng
+    let cloudUrl = '';
+    try { cloudUrl = (JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'config.json'), 'utf8')).cloudUrl || '').replace(/\/+$/, ''); } catch { }
+    fs.writeFileSync(path.join(__dirname, 'docs', 'link.txt'), (cloudUrl ? cloudUrl + '\n' : '') + url + '\n');
     const readme = path.join(__dirname, 'README.md');
     if (fs.existsSync(readme)) fs.writeFileSync(readme, fs.readFileSync(readme, 'utf8').replace(/\*\*https:\/\/[a-z0-9-]+\.trycloudflare\.com\*\*/, `**${url}**`));
     git('add', 'docs/link.txt', 'README.md');

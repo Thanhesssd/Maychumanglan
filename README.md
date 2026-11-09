@@ -78,3 +78,25 @@ Máy khác cùng Wi‑Fi không vào được thì chạy `mo-cong-mang.bat` m�
 
 Mặc định trang tìm máy chủ LAN Chat ở `http://localhost:8000` (cùng máy). Nếu máy chủ LAN Chat chạy ở máy khác,
 vào trang quản lý, bấm **Bắt đầu quét** hoặc nhập `IP:8443`.
+
+## ☁️ Chạy trên máy chủ đám mây (tắt laptop vẫn dùng được)
+
+Trang đăng ký chạy trên **Render.com** (miễn phí), dữ liệu tài khoản lưu ở **Supabase** (miễn phí).
+Link cho mọi người vẫn là **https://m23931716-coder.github.io/Quanlymanglan/**: trang này thử máy chủ đám mây trước,
+laptop sau.
+
+1. **Supabase:** vào https://supabase.com, đăng nhập bằng GitHub, bấm *New project*. Vào *SQL Editor*, chạy:
+   ```sql
+   create table kv (key text primary key, value jsonb not null, updated_at timestamptz default now());
+   alter table kv enable row level security;
+   ```
+   Vào *Project Settings → API*, chép **Project URL** và khóa **service_role** (giữ bí mật, không gửi cho ai).
+2. **Render:** vào https://render.com, đăng nhập bằng GitHub tài khoản `m23931716-coder`, bấm *New → Blueprint*,
+   chọn repo **Quanlymanglan**. Render đọc `render.yaml` và hỏi 4 giá trị:
+   `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` (tài khoản quản trị của bạn).
+3. Chờ Render báo *Live*, chép địa chỉ dạng `https://quanlymanglan-xxxx.onrender.com`, ghi vào `data/config.json`
+   trên laptop thành `"cloudUrl": "https://quanlymanglan-xxxx.onrender.com"`, rồi chạy lại `khoi-dong.bat`
+   (hoặc nhờ cập nhật `docs/link.txt` để dòng đầu là địa chỉ này).
+
+Gói miễn phí ngủ sau 15 phút không ai dùng; lần mở đầu tiên sau đó chờ khoảng 1 phút. Tài khoản không mất vì nằm trên Supabase.
+Máy chủ LAN Chat vẫn chạy trên laptop: tắt laptop thì vẫn đăng ký, đăng nhập, cấp quyền được, nhưng phần chat báo "chưa chạy".

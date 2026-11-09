@@ -55,17 +55,26 @@ async function check() {
   retry.hidden = true; go.hidden = true; start.hidden = true; startNote.hidden = true;
   msg.textContent = 'Đang kiểm tra máy chủ…';
   try {
+    // link.txt: mỗi dòng một địa chỉ app, thử lần lượt. Dòng đầu là máy chủ đám mây (chạy cả khi tắt laptop),
+    // dòng sau là đường hầm từ laptop (dự phòng).
     const r = await fetch('link.txt?t=' + Date.now(), { cache: 'no-store' });
-    const url = (await r.text()).trim().replace(/\/+$/, '');
-    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(url)) throw new Error('Chưa có link');
+    const urls = (await r.text()).split(/\s+/).map(s => s.trim().replace(/\/+$/, '')).filter(s => /^https:\/\/[a-z0-9.-]+$/.test(s));
+    if (!urls.length) throw new Error('Chưa có link');
+    let url = null;
+    for (const u of urls) {
+      // Chỉ chính app mới trả lời /api/ping kèm quyền đọc chéo trang; trang lỗi 1033 hay lỗi DNS đều bị coi là tắt
+      const cloud = !/\.trycloudflare\.com$/.test(u);
+      $('link').textContent = u;
+      if (cloud) msg.textContent = 'Đang đánh thức máy chủ… (lần đầu sau lúc vắng người có thể mất tới 1 phút)';
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), cloud ? 75000 : 10000);
+      let ok = false;
+      try { ok = !!(await (await fetch(u + '/api/ping', { cache: 'no-store', signal: ctl.signal })).json()).ok; }
+      catch { } finally { clearTimeout(t); }
+      if (ok) { url = u; break; }
+    }
+    if (!url) throw new Error('Máy chủ không trả lời');
     $('link').textContent = url;
-    // Chỉ chính app mới trả lời /api/ping kèm quyền đọc chéo trang; trang lỗi 1033 hay lỗi DNS đều bị coi là tắt
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 10000);
-    let ok = false;
-    try { ok = !!(await (await fetch(url + '/api/ping', { cache: 'no-store', signal: ctl.signal })).json()).ok; }
-    catch { } finally { clearTimeout(t); }
-    if (!ok) throw new Error('Máy chủ không trả lời');
     const target = url + '/' + location.search; // giữ ?moi=… của link mời
     go.href = target; go.hidden = false;
     msg.textContent = 'Máy chủ đang chạy. Đang chuyển tới app…';
