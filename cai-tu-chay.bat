@@ -10,7 +10,10 @@ echo [1/2] Da cai: may chu tu chay khi bat may.
 rem 2. Khong cho may ngu khi cam sac (ngu la link ngung chay)
 powercfg /change standby-timeout-ac 0
 powercfg /change hibernate-timeout-ac 0
-echo [2/2] Da tat che do ngu khi cam sac.
+rem Gap man hinh laptop khi cam sac: khong ngu (may khong co nap thi bo qua)
+powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0 >nul 2>&1
+powercfg /setactive SCHEME_CURRENT >nul 2>&1
+echo [2/2] Da tat che do ngu khi cam sac (ke ca khi gap man hinh).
 echo.
 echo XONG. Bay gio bat may chu luon: dang mo khoi-dong.bat...
 start "" /min "%~dp0khoi-dong.bat"
