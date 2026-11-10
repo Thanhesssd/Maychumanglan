@@ -125,8 +125,24 @@
 
 <script src="cau-hinh.js"></script>
 <script>
-// Chưa cấu hình Supabase: dùng tạm trang dẫn tới máy chủ trên laptop như trước
-if (!window.CAU_HINH?.SUPABASE_URL || !window.CAU_HINH?.SUPABASE_ANON_KEY) location.replace('laptop.html' + location.search);
+// Supabase chưa sẵn sàng (chưa cấu hình, chưa chạy SQL, hoặc chưa bật đăng nhập GitHub):
+// dùng tạm trang dẫn tới máy chủ trên laptop như trước. Cài xong thì trang tự chuyển sang bản GitHub.
+window.SAN_SANG = (async () => {
+  const C = window.CAU_HINH || {};
+  const toLaptop = () => { location.replace('laptop.html' + location.search + location.hash); return false; };
+  // Vừa đăng nhập GitHub xong (có mã trong địa chỉ): không chuyển đi, để Supabase nhận phiên đăng nhập
+  if (/access_token=|[?&]code=/.test(location.hash + location.search)) return true;
+  if (!C.SUPABASE_URL || !C.SUPABASE_ANON_KEY) return toLaptop();
+  try {
+    const h = { apikey: C.SUPABASE_ANON_KEY };
+    const [db, auth] = await Promise.all([
+      fetch(C.SUPABASE_URL + '/rest/v1/settings?select=id&limit=1', { headers: h, signal: AbortSignal.timeout(10000) }),
+      fetch(C.SUPABASE_URL + '/auth/v1/settings', { headers: h, signal: AbortSignal.timeout(10000) }).then(r => r.json()),
+    ]);
+    if (!db.ok || !auth?.external?.github) return toLaptop(); // chưa có bảng dữ liệu hoặc chưa bật GitHub
+    return true;
+  } catch { return toLaptop(); } // không gọi được Supabase: vẫn cho mọi người vào bằng laptop
+})();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
@@ -134,7 +150,7 @@ const C = window.CAU_HINH;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const dt = t => t ? new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—';
-const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+const sb = C.SUPABASE_URL && C.SUPABASE_ANON_KEY ? supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY) : null;
 let me = null, settings = null, users = [], filter = 'pending', chatUrl = '';
 const STATUS = { pending: 'Chờ cấp quyền', approved: 'Đã cấp quyền', blocked: 'Bị chặn' };
 
@@ -268,10 +284,14 @@ $('btnSave').onclick = async () => {
   toast(error ? 'Không lưu được: ' + error.message : '✅ Đã lưu cài đặt'); if (!error) load();
 };
 
-sb.auth.onAuthStateChange(() => load());
-load();
-// Tự cập nhật: người chờ thấy ngay khi được cấp quyền, quản trị viên thấy người mới đăng ký
-setInterval(() => { if (!document.hidden) load(); }, 15000);
+// Chỉ chạy khi Supabase đã sẵn sàng (nếu chưa, trang đã tự chuyển sang laptop.html)
+window.SAN_SANG.then(ok => {
+  if (!ok || !sb) return;
+  sb.auth.onAuthStateChange(() => load());
+  load();
+  // Tự cập nhật: người chờ thấy ngay khi được cấp quyền, quản trị viên thấy người mới đăng ký
+  setInterval(() => { if (!document.hidden) load(); }, 15000);
+});
 </script>
 </body>
 </html>
